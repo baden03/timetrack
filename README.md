@@ -1,51 +1,72 @@
-#Timetrack
+# Time Tracking Web Application
 
-## Time Tracking Tool ERD
+## Project Description
+This project aims to create a simple yet effective time tracking web application tailored for freelancers, consultants, and small teams. The application allows users to manage clients, projects, and task categories, record time entries, and generate summaries of time spent and associated costs.
 
-This ERD represents the data model for a time-tracking application.
+## Technologies
+The following technologies are being considered for building the Time Tracking application:
 
-### Entities
+### Frontend
+* **React:** A popular JavaScript library for building user interfaces. Well-suited for creating a dynamic and interactive time-tracking interface.
+* **Next.js (optional):** A framework built on top of React that provides features like server-side rendering, routing, and optimizations, streamlining development.
+
+### Backend
+* **Node.js:** A JavaScript runtime environment that allows JavaScript to be excuted outside the browser. Perfect for building the server-side logic of the application.
+* **Express.js:** A web framework for Node.js that simplifies creating APIs and handling HTTP requests.
+
+### Database
+* **MariaDB/MySQL:** Popular relational databases for structured data. 
+* **(Optional) Sequelize or TypeORM:** If using Node.js, these Object-Relational Mappers (ORMs) help manage database interactions.
+
+### Additional Considerations
+* **Authentication:** Google authentication integration for seamless user login.
+
+**Note:** These are initial ideas. As the project evolves, other technologies might be a better fit.
+
+## Entity-Relationship Diagram (ERD) Structure
+
+### Entities and Attributes
 
 #### Users
-* userID (int) - PK
-* googleID (string)
+- `userID` (PK)
+- `googleID`
 
 #### Clients
-* clientID (int) - PK
-* name (string)
+- `clientID` (PK)
+- `name`
 
 #### Projects
-* projectID (int) - PK
-* name (string)
-* description (text)
-* clientID (int) - FK
+- `projectID` (PK)
+- `name`
+- `description`
+- `clientID` (FK)
 
 #### Categories
-* categoryID (int) - PK
-* name (string)
-* hourlyRate (decimal) 
+- `categoryID` (PK)
+- `name`
+- `hourlyRate`
 
 #### TimeEntries
-* timeEntryID (int) - PK
-* date (date)
-* startTime (time)
-* endTime (time)
-* description (text)
-* projectID (int) - FK
-* categoryID (int) - FK
+- `timeEntryID` (PK)
+- `date`
+- `startTime`
+- `endTime`
+- `description`
+- `projectID` (FK)
+- `categoryID` (FK)
 
 #### Expenses
-* expenseID (int) - PK
-* amount (decimal)
-* description (text)
-* date (date)
-* projectID (int) - FK
+- `expenseID` (PK)
+- `amount`
+- `description`
+- `date`
+- `projectID` (FK)
 
 ### Relationships
 
-* Users - One-to-many (1:N) - Clients
-* Clients - One-to-many (1:N) - Projects
-* Projects - One-to-many (1:N) - TimeEntries
-* Projects - One-to-many (1:N) - Expenses
-* Categories - One-to-many (1:N) - TimeEntries
+- **Users to Clients**: One-to-many (A user can have multiple clients).
+- **Clients to Projects**: One-to-many (A client can have multiple projects).
+- **Projects to TimeEntries**: One-to-many (A project has multiple time entries).
+- **Projects to Expenses**: One-to-many (A project can have multiple expenses).
+- **Categories to TimeEntries**: One-to-many (A time entry belongs to one category).
 
