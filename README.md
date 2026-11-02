@@ -4,6 +4,7 @@
 **Date:** November 2026
 **Supersedes:** Concept v1, the centralized multi-user design, archived at [docs/spec-v1-centralized.md](docs/spec-v1-centralized.md) (git tag `spec-v1-centralized`).
 **Background:** [docs/timetrack_architecture_decisions_2026-11-02.md](docs/timetrack_architecture_decisions_2026-11-02.md) records the brainstorming this concept builds on. Where the two differ, this document is current.
+**Architecture direction:** [docs/architecture.md](docs/architecture.md) (shared Rust domain core, separate desktop and hub applications).
 **Also archived:** the 2024 prototype reconstruction, [docs/brief-v1.md](docs/brief-v1.md).
 
 This document is technology-agnostic. It states what the product does and the rules it follows, not how it is built.
@@ -93,22 +94,25 @@ Desktop, macOS first. Windows and Linux are intended but later. Mobile is not in
 | Record authority | Collaborators own their entries. The owner owns the project, clients, categories, shared tags, members, rates, amendments and client invoices. |
 | Collaborator entries | The owner can view them but never rewrite them. |
 | Owner corrections | Separate amendment records that affect the owner's figures only. |
-| Permissions | Project-level capabilities. Roles are presets. Per-person overrides. |
+| Permissions | Project-level capabilities. Roles are presets. Per-person overrides. Default deny, no privilege escalation, one evaluator everywhere. |
+| Ownership | Exactly one owner per project at any time. Transfer is atomic, needs explicit acceptance, and the former owner chooses their own post-transfer status (project manager, collaborator, or leave). History is permanently audited. |
+| Owner-only operations | Defining rates, deleting the project, transferring ownership. Not delegable through roles or overrides in the first milestone. |
+| Architecture | A shared Rust domain core used by separate desktop and hub applications (see `docs/architecture.md`). |
 | Visibility | A collaborator sees only their own entries and rates. Project managers and owners see all entries. |
 | Rates | The project owner defines each member's hourly rate. Immutable, effective-dated, with overrides by client, project and category. |
 | Currency | Per owner, default EUR, locked once any rate exists. Totals in different currencies are never added together. |
 | Time recording | (a) start and end, (b) duration only, (c) live timer. |
 | Display of durations | `hh:mm` everywhere. |
 | Precision | Whole minutes. No rounding. Money is rounded half-up to the smallest currency unit once per entry. |
-| Midnight | Entries crossing midnight are split automatically into linked entries. |
-| Timezone | One IANA timezone per user preference, captured on every entry. |
+| Midnight | Entries crossing midnight are split automatically into linked entries. The author's client performs the split when the time is recorded and stores the result with its timezone context. The hub stores and checks it for consistency but never recalculates it. |
+| Timezone | One IANA timezone per user preference, captured on every entry together with the UTC offsets in force. Recorded interpretation is authoritative; viewing in another zone never moves an entry's date or duration. Client and hub need not share timezone data versions. |
 | Description | Required. |
 | Project date | Derived from the first and last entries. |
 | Invoicing | Locks attach to a closed invoice period, not the calendar month. Two kinds: contributor invoice and client invoice. Invoice documents stay outside TimeTrack. |
 | Late entries | Allowed after a period closes. They are uninvoiced and bill next time. |
 | Reopening an invoice | Allowed, with a mandatory reason, audited, visible to the other party. |
 | Offline | Supported in standalone and for temporarily disconnected hub users. |
-| Conflicts | By design rare. The hub orders locks and permissions. Rejected offline changes are kept visible, never dropped. |
+| Conflicts | By design rare. The hub orders locks and permissions. Competing edits to one record are shown to the person, who chooses which version to accept, in the manner of Git. Never silent last-write-wins. Rejected offline changes are kept visible, never dropped. |
 | Editing | Row-level in-place editing. |
 | Delete | Archive by default. Danger-zone hard delete where permitted. Invoiced entries are never deleted. |
 | Sign-in | Passkeys through a minimal hub-served page, opened in the system browser. No sign-in in standalone. |
@@ -182,14 +186,13 @@ Access is a set of **capabilities** on a project. Roles are convenient presets, 
 | `entries.viewAll` | See all members' entries |
 | `amend` | Create owner amendments (§11) |
 | `rates.viewAll` | See all members' rates and values |
-| `rates.manage` | Define rates and resolve rate conflicts |
 | `members.invite` | Invite people to the project |
 | `members.manage` | Change members' roles, capabilities and removal |
 | `project.edit` | Edit project settings, categories and shared tags |
 | `invoices.close` | Close client invoices |
 | `invoices.reopen` | Reopen client invoices |
 | `project.archive` | Archive and restore the project |
-| `project.delete`, `project.transfer` | Delete the project; transfer ownership (owner only) |
+| *Owner-only operations* | Define rates and resolve rate conflicts; delete the project; transfer ownership. Not capabilities and never delegable (§4.8) |
 
 ## 4.3 Presets
 
@@ -199,12 +202,12 @@ Access is a set of **capabilities** on a project. Roles are convenient presets, 
 | `entries.viewAll` | | ✔ | ✔ |
 | `members.invite`, `members.manage` | | ✔ | ✔ |
 | `project.edit` | | ✔ | ✔ |
-| `amend`, `rates.viewAll`, `rates.manage` | | | ✔ |
+| `amend`, `rates.viewAll` | | | ✔ |
 | `invoices.close`, `invoices.reopen` | | | ✔ |
 | `project.archive` | | | ✔ |
-| `project.delete`, `project.transfer` | | | ✔ (not delegable) |
+| Owner-only: define rates, delete project, transfer ownership | | | ✔ (not delegable) |
 
-The owner may grant any delegable capability to anyone as an override, for example `invoices.close` to a project manager.
+The owner may grant any delegable capability to anyone as an override, for example `invoices.close` to a project manager. Owner-only operations cannot be granted.
 
 ## 4.4 Visibility rules
 
@@ -230,6 +233,45 @@ The hub operator decides policy for the hub: who may create accounts (default: o
 2. Until accepted, the invitee sees only the invitation.
 3. On acceptance, the project's reference data and the invitee's entitled data are synced to their devices.
 4. The owner or a person with `members.manage` can change or remove a member. Removal stops future sync. The former member keeps their own entries as read-only history and cannot add new ones. Their entries remain visible to the owner.
+
+## 4.8 Ownership and transfer
+
+- A project has **exactly one owner** at any time.
+- **Owner-only operations** are defining rates (including resolving rate conflicts), deleting the project, and transferring ownership. They are never delegated through roles or overrides in the first milestone. A project manager has none of them, whatever else they are granted.
+### Transfer workflow
+
+1. The current owner starts the transfer and selects the proposed new owner, an active account on the same hub.
+2. The current owner chooses their **own status after the transfer**:
+   - **Project manager:** remains involved with delegated management capabilities.
+   - **Collaborator:** keeps access as a regular contributor.
+   - **Leave project:** gives up all membership and access.
+3. The proposed new owner must **explicitly accept**. They may decline, and the current owner may withdraw the offer until it is accepted.
+4. The transfer executes **atomically** at the hub. There is always exactly one owner, never none and never two.
+5. The owner-only operations pass to the new owner.
+6. Historical authorship is unchanged: time entries, amendments, invoices and history records keep their original authors.
+7. The transfer is permanently recorded in the history, including the former owner's chosen status.
+
+The former owner's status is an explicit part of the request. It is never assigned automatically.
+
+### After a transfer
+
+- A former owner who stays as a project manager or collaborator holds only that preset's capabilities. They do not keep any owner-only operation.
+- A former owner who leaves is treated like a removed member (§4.7): they keep their own entries as read-only history, cannot add new ones, and their entries remain visible to the new owner.
+- Amendments made by the former owner stay in place under their authorship. The new owner may withdraw them.
+- Closed invoices stay as they were issued, attributed to the former owner.
+- Offline devices learn of the transfer at their next sync. The hub evaluates each queued change under the ownership and permissions in force when it **receives** the change (§4.5).
+
+Still to be designed (§22): what moves with the project (rates, clients, categories, shared tags, currency), and the rate for a former owner who stays as a member.
+
+## 4.9 Authorization rules
+
+- **Default deny.** Anything not explicitly granted is refused.
+- **One decision everywhere.** The same evaluator answers for the interface, local changes, queued sync changes, hub routing and any future API.
+- **No privilege escalation.** A person can grant only capabilities they hold and may delegate, and cannot assign a role above their own. A project manager cannot grant owner-only operations.
+- **Permissions drive delivery.** What a person isn't entitled to is never sent to their devices (§13.1), not merely hidden by the interface.
+- **Role changes** reach offline devices at the next sync. Data already cached is not recalled (§4.5).
+
+Still to be designed (§22): override precedence, and whether project managers may grant the manager role.
 
 ---
 
@@ -364,7 +406,9 @@ Derived, not stored: first and latest entry date, total time.
 | `description` | Required (at stop for a timer) |
 | `billable` | Defaults from the project, overridable |
 | `tags` | Zero to ten |
-| `splitGroupId` | Shared by linked pieces of a midnight split |
+| `startOffset`, `endOffset` | UTC offsets (minutes) in effect at the start and end instants, as the author's app recorded them |
+| `tzdataVersion` | Version of the timezone database the author's app used. Informational only |
+| `splitGroupId` | Shared by linked pieces of a midnight split. Each piece also records the original span (`spanStartAt`, `spanEndAt`) and its place in the group (`pieceIndex`, `pieceCount`) |
 | `version` | Increases with every edit (§11.1) |
 | `deleted` | Deletion marker (tombstone) |
 | `contributorInvoiceId`, `clientInvoiceId` | Invoice locks (§12) |
@@ -415,6 +459,7 @@ Required: project, category, description, and either (start and end) or a durati
 - Entries dated or ending in the future are rejected.
 - `workDate` is a plain calendar date computed in the entry's stored timezone. Changing the timezone preference affects only later entries.
 - An ambiguous wall-clock time (the repeated hour when daylight-saving time ends) uses the first occurrence.
+- Times are recorded as instants together with their zone and offsets, so their meaning never depends on the viewer's or the hub's timezone data (§8.5).
 - Device clocks may be wrong. The hub also records when it received an entry. The future-entry check uses the device clock locally and the hub's received time with a tolerance on arrival.
 
 ## 8.4 Validation
@@ -435,6 +480,35 @@ When an interval crosses midnight in the entry's timezone, it is split automatic
 - Editing treats the group as one span: change the start of the first piece or the end of the last, and the pieces are re-split. If the crossing disappears, they merge.
 - Deleting one piece deletes the group, after a confirmation that says so.
 - If one piece is locked by an invoice, the locked piece is frozen and the other can be edited, but not in a way that moves the midnight boundary (§12.8).
+
+### The client performs the split
+
+- The author's app calculates the split **when the time is recorded**, using the entry's timezone, and records the result. The hub stores and delivers it. It never recalculates it, with its own timezone data or any other.
+- The recorded result is the authoritative interpretation. It stays unchanged unless the author edits the entry's timing.
+- Each piece records its start and end instants (UTC), the entry's IANA timezone, the UTC offset in force at its start and end, its local calendar date, its position in the group, and the original span of the whole group. The timezone database version used is recorded for diagnosis only.
+- **Elapsed time comes from the instants.** A split across a daylight-saving change has the real duration, not the difference between wall-clock times.
+- If a zone has no local midnight on a given day (a transition at midnight), the boundary is the first instant of the new calendar date.
+- Editing only non-timing fields (description, category, tags, billable flag) never recalculates a split. Editing the timing recalculates it on the editing device, using the entry's recorded timezone.
+- The pieces of a group are created, changed, delivered and rejected **together**.
+- An entry has exactly one timezone. For a timer it is the zone in force when the timer started.
+
+### What the hub checks
+
+The hub checks consistency from the recorded values alone, with no timezone database:
+
+- the pieces are contiguous and cover the original span exactly, with no gap or overlap
+- the elapsed minutes of the pieces add up to the elapsed minutes of the span
+- each piece's local date equals the date of its start instant shifted by its recorded offset, and every internal boundary is local midnight under the recorded offset
+- offsets lie in a plausible range (−12:00 to +14:00)
+- the group is complete
+
+An inconsistent split is rejected like any invalid change (§13.6). The hub may compare a recorded offset with its own timezone data and warn the owner of a discrepancy. A warning is never a reason to reject or alter the record.
+
+### Recording versus reporting
+
+Recording fixes which calendar day an entry belongs to and how long it lasted. Reporting never changes that. Someone who records time in Costa Rica for a project owned in Germany keeps their Costa Rican dates and totals when the owner views them in Germany.
+
+Times are shown in the zone the author recorded them in, labelled when that differs from the viewer's. A viewer may choose to see times in their own zone, but the dates and totals used for accounting do not move.
 
 ## 8.6 Entry form
 
@@ -655,15 +729,35 @@ The hub filters per recipient. A device never receives data its person isn't ent
 - **Queued delivery.** The hub retains changes for disconnected participants and delivers them on reconnection.
 - **Idempotent.** Delivering or submitting the same change twice has the same effect as once.
 - **No silent loss.** A change that cannot be applied is surfaced to the person, never dropped.
+- **No silent overwrite.** Competing edits are never settled by last-write-wins. A person chooses (§13.3).
 - **Offline use.** Every local operation works offline and is queued.
 
-## 13.3 One writer per record
+## 13.3 One writer per record, and conflicts
 
-By construction, nearly all records have one author, so cross-person edit conflicts do not arise. Two cases remain.
+By construction, nearly all records have one author, so edit conflicts between different people do not arise. Two cases remain.
 
-**The same person on two devices.** Edits are ordered by a logical clock rather than device time. The later edit to a field wins, the earlier value is kept in the history and visible. Neither is silently lost.
+**Competing edits to one record.** The same person edits a record on two devices, or the owner and a delegate edit the same owner-authority record (for example project settings) at once.
 
-**Authority across records.** A permission change, a lock, or a membership removal can conflict with an offline edit. The hub decides by the order it received them (§13.6).
+**Authority across records.** A permission change, a lock, an ownership transfer or a membership removal races an offline edit. This is not settled by a choice. The hub decides by the order it received them (§13.6).
+
+### Detection
+
+Every change names the version it was based on. The hub accepts it when that is still the current version. If the base is older, the hub compares what each side changed:
+
+- **Different fields changed:** the changes merge automatically.
+- **The same field changed to different values:** this is a **conflict**.
+
+For an entry, the fields that conflict together are: timing (date, start, end, duration), category, description, tags, billable flag. A split group is treated as one unit.
+
+### Presentation and resolution
+
+- The first accepted version stays current and is what everyone else sees. The later change is held on the device where it was made and marked as a conflict. The entry is flagged.
+- The person sees both versions side by side with their origins (device and time) and chooses: keep mine, take the other, or combine them by editing.
+- The choice becomes a new version. The history records both competing versions, who chose and when.
+- Only the person with authority over the record resolves its conflict: the author for an entry, the owner (or the delegate holding the capability) for project records. Nobody resolves someone else's conflict.
+- If an invoice closes while a conflict is unresolved, the entry is pinned at the accepted version, and the held change is rejected as on a locked entry (§12.7).
+
+This is the product behavior. The replication mechanism that supports it is open (§22).
 
 ## 13.4 Deletions
 
@@ -675,7 +769,7 @@ A standalone user joins by signing in, linking the local identity, and choosing 
 
 ## 13.6 Hub validation
 
-The hub re-validates everything on arrival: authorship, membership and capabilities, project and category availability, locks, time rules, and the future-entry check against received time. A rejected change returns a reason, and the device shows it in a **needs-attention** list with the person's draft preserved.
+The hub re-validates everything on arrival: authorship, membership and capabilities, project and category availability, locks, time rules, and the future-entry check against received time. Midnight splits are checked for structural consistency only (§8.5). The hub never recalculates them and needs no timezone database. A rejected change returns a reason, and the device shows it in a **needs-attention** list with the person's draft preserved.
 
 ## 13.7 New and recovered devices
 
@@ -744,7 +838,7 @@ Owners can amend an entry from the project page, with a required reason. Amended
 
 ## 14.8 Sync and account
 
-Hub connection (connect, sign in, disconnect), account details, devices with revoke, sync status and the needs-attention list.
+Hub connection (connect, sign in, disconnect), account details, devices with revoke, sync status, and the needs-attention list. Conflicts open a side-by-side comparison where the person chooses a version (§13.3).
 
 ## 14.9 Navigation
 
@@ -845,6 +939,11 @@ Light and dark themes with a switch. Centralized theme tokens, no hard-coded col
 | 23:00 to 02:00, Europe/Berlin, from 2026-11-02 | Two entries: 11-02 23:00–24:00 (1:00) and 11-03 00:00–02:00 (2:00); one group; **3:00** |
 | Edit that span's end to 23:30 | Merges into one entry on 11-02, **0:30** |
 | 01:30 to 03:30 on 2026-03-29, Europe/Berlin (02:00 jumps to 03:00) | Real elapsed **1:00** |
+| 23:00 on 2026-10-24 to 04:00 on 2026-10-25, Europe/Berlin (clocks go back at 03:00) | Split at midnight into **1:00** (24 Oct) and **5:00** (25 Oct). Real elapsed **6:00**, not the 5:00 wall-clock difference |
+| A Costa Rica author records 22:00–23:30 on 2 Nov; the owner views the report in Germany | The entry stays on **2 Nov**, **1:30**. Times are labelled with the author's zone |
+| A split recorded by a client whose timezone database is newer than the hub's | Hub accepts it unchanged and does not recalculate |
+| A split with a gap, an overlap, a missing piece, or minutes that don't add up to the span | Hub **rejects** the whole group |
+| Edit only the description of a split entry | Split unchanged, not recalculated |
 | Duration entry 1:30 | No start or end, **1:30** |
 | End before start, start equals end, over 24 hours, in the future | Rejected |
 | Overlap with own entry on any project | Warning; save allowed |
@@ -862,7 +961,9 @@ Light and dark themes with a switch. Centralized theme tokens, no hard-coded col
 | Doug tries to reopen his invoice while a client invoice includes it | **Refused** until Baden reopens his |
 | Baden amends Doug's 3:30 entry to 3:00 before closing | Client invoice uses **3:00**. Doug's entry and invoice stay **3:30** |
 | Entry 31 Oct 23:00 to 1 Nov 02:00 with October closed | Oct piece locked. Nov piece editable, but its start can't move |
-| Same person edits one field on two offline devices | Later logical edit wins; the other value stays in the history |
+| Same person edits the description of one entry on two offline devices | The first change to reach the hub stays current. The other is held as a **conflict**. The person chooses a version, and the history records both |
+| Same person edits the description on one device and the category on another | Both changes **merge automatically** |
+| Owner closes an invoice while an entry has an unresolved conflict | Entry pinned at the accepted version. The held change is rejected |
 
 ---
 
@@ -883,7 +984,7 @@ Light and dark themes with a switch. Centralized theme tokens, no hard-coded col
 - Multi-record operations are atomic.
 - Failed saves and rejected changes never silently lose user input.
 - Idempotent sync (§13.2).
-- The hub validates every rule. The app's validation is advisory.
+- The hub validates every rule, except that it does not reinterpret time zones: the author's app records that interpretation and the hub checks it for consistency.
 
 ## 19.3 Performance
 
@@ -910,6 +1011,7 @@ Automated tests are required for:
 
 - Duration, totals, `hh:mm` and value calculation, using the vectors in §10.7 and §18
 - Midnight splitting, merging, editing, and daylight-saving days
+- Recorded splits: the hub's consistency checks, rejection of gaps, overlaps and missing pieces, acceptance across differing timezone databases, display of times in the author's zone without moving dates
 - Rate resolution, effective dates, specificity and conflict detection
 - Timezone handling, including a changed preference
 - All validation rules, locally and at the hub
@@ -917,7 +1019,8 @@ Automated tests are required for:
 - Amendments never changing the author's data
 - Invoice closing, snapshots, locks, reopening, late entries and the cross-lock rule
 - Offline behavior: queueing, idempotent delivery, rejection of stale edits, ordering by hub receipt
-- Same-person multi-device edits
+- Conflict handling: detection by base version, automatic merge of non-overlapping edits, side-by-side resolution of overlapping ones, the choice recorded in the history
+- Authorization: default deny, no escalation, owner-only operations never delegable, atomic ownership transfer, one evaluator for all paths
 - Tombstones, joining and leaving a hub, new and revoked devices
 - Backup, restore and database migration, including a failed migration
 - Authentication flows: invite, passkey, device pairing, revocation, operator recovery
@@ -994,8 +1097,8 @@ Each has a working default that the specification above already assumes.
 
 | # | Item | Working default |
 |---|---|---|
-| 1 | Local app technology, platforms, shell, database and hub stack | Open; the next topic |
-| 2 | Sync mechanism and exact conflict algorithm | Open; requirements are in §13 |
+| 1 | Interface framework, operating-system integration, database, transport and deployment | Open. The direction is a shared Rust domain core (`docs/architecture.md`) |
+| 2 | Replication mechanism behind §13 | Open; requirements are in §13 |
 | 3 | Sign-in on the hub: browser passkeys or device-held keys | Browser passkeys |
 | 4 | Whether a password method is offered (v1 allowed it for admins) | No; passkeys only, recovery through the operator |
 | 5 | Google sign-in | Later, optional |
@@ -1018,6 +1121,18 @@ Each has a working default that the specification above already assumes.
 | 22 | Who may create API keys | The account holder, once API access exists |
 | 23 | Client contact fields | Name only |
 | 24 | Hub discovery and moving a hub to a new name | Phase 3 |
+| 25 | Ownership transfer: what moves with the project (rates, clients, categories, shared tags, invoices, currency) | Open. Closed invoices stay as history |
+| 26 | Rate for a former owner who stays as a project manager or collaborator | The new owner must set a base rate before accepting; otherwise the former owner's entries show "no rate" |
+| 27 | Queued edits from before a transfer | Evaluated under the permissions in force when the hub receives them |
+| 28 | Whether owner-only operations can ever be explicitly delegated | No, in the first milestone |
+| 29 | Permission override precedence, and whether project managers may grant the manager role | Overrides beat presets; managers cannot grant the manager role |
+| 30 | Whether non-overlapping edits to one record merge automatically | Yes (§13.3) |
+| 31 | Who resolves a conflict on an owner-authority record when a delegate is involved | The owner |
+| 32 | Cross-hub replication of amendments and conflicts | Phase 4 |
+| 33 | Whether the hub warns the owner when a recorded offset disagrees with the hub's own timezone data | Optional warning only, never a rejection |
+| 34 | Which timezone times are shown in by default | The author's recorded zone, labelled when it differs from the viewer's |
+| 35 | Display of the end of a piece at midnight (24:00 or 00:00) | 24:00 |
+| 36 | Whether the client uses bundled or operating-system timezone data | Open; the version used is recorded either way |
 
 ---
 
@@ -1040,6 +1155,8 @@ Each has a working default that the specification above already assumes.
 | Reserved `lockedAt` | Contributor and client invoices (§12) |
 | Server-side audit log | Append-only history on every record, plus the hub's log |
 | Core and personal tags | Shared (owner-managed) and personal tags |
+| Optimistic concurrency on edits | Version-based conflict detection with explicit, manual resolution (§13.3) |
+| Server-side rules | A shared Rust domain core used by the app and the hub |
 
 ## 23.2 What carried over unchanged
 
