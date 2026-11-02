@@ -662,7 +662,7 @@ Closing an invoice:
 3. Marks them invoiced and locks them.
 4. Records an optional external invoice reference, who closed it, and when.
 
-Entries dated in the period but not yet synced to the hub, or logged afterwards, are **not** included. They stay uninvoiced and go on the next invoice.
+Entries dated in the period but not yet synced to the hub, or logged afterwards, are **not** included. They stay uninvoiced and go on the next invoice. A client invoice treats entries with an open conflict (§13.3) the same way; a contributor invoice is refused until the member resolves them.
 
 ## 12.3 Lock effects
 
@@ -755,7 +755,7 @@ For an entry, the fields that conflict together are: timing (date, start, end, d
 - The person sees both versions side by side with their origins (device and time) and chooses: keep mine, take the other, or combine them by editing.
 - The choice becomes a new version. The history records both competing versions, who chose and when.
 - Only the person with authority over the record resolves its conflict: the author for an entry, the owner (or the delegate holding the capability) for project records. Nobody resolves someone else's conflict.
-- If an invoice closes while a conflict is unresolved, the entry is pinned at the accepted version, and the held change is rejected as on a locked entry (§12.7).
+- An entry with an unresolved conflict cannot be marked as invoiced. A contributor invoice is refused while the member's own entries in it have an open conflict, and lists them. A client invoice excludes such entries, lists them, and they go on the next invoice, so one person's unresolved edit never blocks the owner (§12.2).
 
 This is the product behavior. The replication mechanism that supports it is open (§22).
 
