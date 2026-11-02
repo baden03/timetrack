@@ -13,14 +13,14 @@ This document is technology-agnostic. It states what the product does and the ru
 
 TimeTrack is a multi-user time log for a small team of freelancers and contractors working on shared client projects. It replaces the per-client, per-project Google Docs currently used to record hours.
 
-It starts as a tool for one person (the admin) and grows to include two collaborators. Each person logs their own time, and the admin sees everything and can value that time at each person's hourly rate.
+It starts as a tool for one person (the admin) and grows to include multiple collaborators. Each person logs their own time, and the admin sees everything and can value that time at each person's hourly rate.
 
 **Design philosophy.** Recording and correcting time must take as little effort as possible. A user should be able to open the app, pick a project, enter or start a time record, and see the day's total immediately. Administration stays out of the way. Priorities: **speed, simplicity, accuracy, minimal interruption.**
 
 ## 1.1 In scope for version 1
 
 - Admin-created user accounts with roles, project and category assignment
-- Clients, projects, categories, shared tags
+- Clients, projects, categories, and tags (admin-maintained core tags plus personal tags any user can create)
 - Three ways to record time: start/end, duration only, live timer
 - Automatic splitting of entries that cross midnight
 - Per-user hourly rates with override rules and full rate history
@@ -29,6 +29,8 @@ It starts as a tool for one person (the admin) and grows to include two collabor
 - Complete, append-only audit log
 - Per-user preferences (timezone, date format, clock format) and system settings (currency)
 - Light and dark appearance
+- A translatable interface (English by default; see §12.4)
+- A service layer shaped so that a public API can be added without rework (see §17)
 
 ## 1.2 Explicitly out of scope for version 1
 
@@ -40,6 +42,8 @@ It starts as a tool for one person (the admin) and grows to include two collabor
 - Data export and import
 - Offline use and mobile-specific apps; desktop browsers are the primary platform
 - Email notifications of any kind
+- A public API (designed for in version 1, built later; see §17)
+- Interface languages other than English (the mechanism is in scope, additional translations are not)
 
 ## 1.3 Primary platform
 
@@ -55,7 +59,10 @@ Desktop browsers. Tablet and phone layouts must remain usable but are not optimi
 | Visibility | Users see only their own entries. Admin sees all. |
 | Project access | Admin assigns users to projects. Users see and log only assigned projects. |
 | Category access | Admin assigns categories to users. Archiving a category is global. |
-| Tags | Shared vocabulary, managed by the admin. |
+| Tags | Core tags maintained by the admin and available to everyone. Any user may also tag an entry with any tag they type (a personal tag, suggested only to its creator and visible to the admin). Names up to 40 characters, up to 10 tags per entry. |
+| Language | All interface text is translatable. Default English. Per-user language preference. |
+| Code language | All code, comments and developer documentation are in English. |
+| API | A future add-on, but designed for from the start. API keys belong to a user and act with that user's permissions. |
 | Time recording | (a) start and end, (b) duration only, (c) live timer. |
 | Display of durations | `hh:mm` everywhere. |
 | Precision | Whole minutes. No rounding, no 15-minute rule. |
@@ -72,11 +79,11 @@ Desktop browsers. Tablet and phone layouts must remain usable but are not optimi
 | Audit | Detailed append-only audit log in version 1. |
 | Notifications | In-app only. Only for a timer left running from a previous day. |
 | Sign-in | Passkeys for everyone. Google sign-in optional (decided later). Admin may also use email and password. |
-| Break-glass | A command-line super-admin procedure that issues admin invites. No web login. |
+| Break-glass | A command-line super-admin procedure that can update admin email, and issue new admin invite link. No web login. |
 | Recovery | Admin re-issues an invite link. |
 | Onboarding | Admin copies an invite link and sends it personally. No outgoing email. |
 | Timer | One running timer per user. |
-| Entry window | Default view shows the last 60 days (system setting). Search covers all entries. |
+| Entry window | Default view shows the last 60 days (system setting). Search covers all entries viewable by the user |
 
 ---
 
@@ -88,7 +95,7 @@ Desktop browsers. Tablet and phone layouts must remain usable but are not optimi
 |---|---|
 | **User** | Log, edit and delete own entries on assigned projects and categories. Run own timer. View own entries, own rates and own values. Edit own preferences. |
 | **Admin** | Everything a user can do, plus: manage users, clients, projects, categories, tags, assignments, rates and system settings. View and edit all users' entries. View the audit log. Resolve rate conflicts. |
-| **Super-admin** | Not an application account. A command-line procedure on the server (see §4.5). Creates admin accounts and re-issues admin invites. |
+| **Super-admin** | Not an application account. A command-line procedure on the server (see §4.5). Creates admin accounts, updates admin email, and re-issues admin invites. |
 
 Only the super-admin procedure creates admins. Admins create ordinary users.
 
@@ -96,6 +103,7 @@ Only the super-admin procedure creates admins. Admins create ordinary users.
 
 - A user sees only their own entries and rates, never another user's.
 - A user sees only projects and categories assigned to them.
+- A user sees core tags and their own personal tags, never another user's personal tags. An admin sees any tag attached to an entry they can view.
 - Existing entries remain visible to their owner even if the project or category is later unassigned or archived.
 - An admin's project page lists all users' entries, grouped by date and then by user, with a user filter.
 
@@ -139,7 +147,11 @@ There is no self-registration and no public sign-up.
 ## 4.5 Break-glass: super-admin procedure
 
 - A command run on the server, with no network-facing login.
-- It can create an admin account and issue a fresh admin invite link, and nothing else.
+- It can only:
+  - create an admin account
+  - update admin email address
+  - issue a fresh admin invite link
+  - nothing else
 - It has no access to clients, projects, entries or rates.
 - Every use is written to the audit log with the actor shown as the super-admin procedure.
 - This is the only recovery path for an admin who has lost all sign-in methods.
@@ -152,7 +164,7 @@ Field lists are logical. Types and storage are left to the implementation.
 
 ## 5.1 User
 
-`id`, `email` (unique), `displayName`, `role` (user | admin), `status` (active | disabled), `timezone`, `dateFormat`, `clockFormat` (24h | 12h), `createdAt`, `lastLoginAt`.
+`id`, `email` (unique), `displayName`, `role` (user | admin), `status` (active | disabled), `timezone`, `language`, `dateFormat`, `clockFormat` (24h | 12h), `apiAccess` (boolean, default off), `createdAt`, `lastLoginAt`.
 
 ## 5.2 Client
 
@@ -176,7 +188,14 @@ A category describes a type of work. It carries no rate. Rates are defined separ
 
 ## 5.5 Tag
 
-`id`, `name`, `status` (active | archived). Shared by all users. Managed by the admin.
+`id`, `name`, `kind` (core | personal), `ownerUserId` (personal tags only), `status` (active | archived).
+
+- **Core tags** are maintained by the admin and available to every user.
+- **Personal tags** are created by any user simply by typing a new tag on an entry. They are suggested only to their creator. Other users never see them. The admin can see all personal tags, in tag review and on entries.
+- A tag name is 1–40 characters, trimmed, and unique ignoring case within the core set and within each user's personal set. If a user types a name that matches a core tag, the core tag is used.
+- An entry may carry up to 10 tags.
+- The admin can **promote** a personal tag to a core tag. Personal tags with the same name belonging to other users are merged into it, and their entries are re-linked. The change is audited.
+- A user can rename or archive their own personal tags, and delete them when unused.
 
 ## 5.6 Assignments
 
@@ -200,7 +219,9 @@ Removing an assignment never alters existing entries or rate rules.
 | `minutes` | Duration in whole minutes. **Derived** from `startAt`/`endAt` for intervals; stored data for duration-only entries |
 | `description` | Required text (required at stop for running timers) |
 | `billable` | Boolean; defaults from the project, overridable |
-| `tags` | Zero or more tags |
+| `tags` | Zero to ten tags, core or personal |
+| `source` | Where the entry came from: web, or api (reserved for §17) |
+| `externalRef` | Optional identifier supplied by an external tool, unique per user when present (reserved for §17) |
 | `splitGroupId` | Shared by linked halves of a midnight split |
 | `version` | Optimistic-concurrency counter |
 | `createdAt`, `updatedAt` | Timestamps |
@@ -216,7 +237,7 @@ See §10.
 
 ## 5.10 System Settings
 
-`currency` (default EUR; locked once any rate exists), `entryWindowDays` (default 60), `defaultTimezone`, default `dateFormat` and `clockFormat` for new users.
+`currency` (default EUR; locked once any rate exists), `entryWindowDays` (default 60), `defaultTimezone`, `defaultLanguage` (default English), default `dateFormat` and `clockFormat` for new users.
 
 ---
 
@@ -234,7 +255,7 @@ All three produce the same kind of entry, appear in the same tables, and can be 
 
 ## 6.2 Required and optional fields
 
-Required: project, category, description, and either (start and end) or a duration. Optional: date (default today), tags, billable flag (defaults from the project).
+Required: project, category, description, and either (start and end) or a duration. Optional: date (default today), tags (a core tag, or any new tag typed in), billable flag (defaults from the project).
 
 ## 6.3 Dates and timezones
 
@@ -407,7 +428,8 @@ Empty state: "No time entries have been recorded for this project." An empty pro
 ## 9.5 Administration screens (admin)
 
 - **Users**: create, edit, disable, re-issue invite, assign projects and categories, rate table (§8.6).
-- **Clients**, **Projects**, **Categories**, **Tags**: create, edit, archive, hard delete where permitted.
+- **Clients**, **Projects**, **Categories**: create, edit, archive, hard delete where permitted.
+- **Tags**: create, edit and archive core tags; review personal tags with their owners and usage; promote a personal tag to core.
 - **System settings**: currency, entry window, defaults for new users.
 - **Rate conflicts**: list of unresolved conflicts with a resolve action.
 - **Audit log**: browse and filter (§10).
@@ -427,7 +449,9 @@ Persistent navigation: Dashboard, Projects, Search, and (admin) Administration. 
 
 ## 10.2 Event content
 
-Each event records: timestamp, actor (user, or the super-admin procedure), the session, the entity type and ID, the action, the previous and new values (field-level changes), and a reason or comment where one was supplied.
+Each event records: timestamp, actor (user, or the super-admin procedure), the session or the API key used, the entity type and ID, the action, the previous and new values (field-level changes), and a reason or comment where one was supplied.
+
+Events store language-neutral codes and values, not rendered sentences, and are displayed in the viewer's language (§12.4).
 
 ## 10.3 What is logged
 
@@ -436,6 +460,7 @@ Each event records: timestamp, actor (user, or the super-admin procedure), the s
 - Sign-ins, failed sign-ins, sign-outs, credential changes, invites issued and consumed, session revocations
 - Super-admin procedure use
 - Timer start, stop, discard
+- API key creation and revocation, and every write made with a key
 
 ## 10.4 Hard deletes
 
@@ -456,7 +481,7 @@ Retention and any personal-data handling for the log are open (see §15).
 | Client | Yes (default). Hides it and its projects from active lists; history remains. | Admin only, danger zone: lists the number of projects and entries that will be destroyed and requires explicit confirmation. Removes projects and entries atomically. |
 | Project | Yes (default). | Same, for its entries. |
 | Category | Yes (never hidden from existing entries). | **Never** if any entry or rate rule references it. |
-| Tag | Yes. | Never while in use. |
+| Tag | Yes. Archived tags are no longer suggested; existing entries keep them. | Never while in use. A personal tag may be deleted by its owner when unused; a core tag by an admin when unused. |
 | Entry | n/a | Owner or admin, with confirmation, unless locked (reserved). Audited with a snapshot. |
 | User | Disable | Only if the user has no entries and no audit references. |
 
@@ -468,11 +493,12 @@ Archived items can be restored by an admin. Deletes that touch several records a
 
 ## 12.1 User preferences
 
+- Language (default English; see §12.4)
 - Timezone (IANA)
 - Date format (default `DD.MM.YYYY`; others available)
 - Clock format (default 24-hour; 12-hour available)
 
-Duration is always displayed `hh:mm`. All dates and times are shown in the viewing user's formats and timezone.
+Duration is always displayed `hh:mm`. All dates and times are shown in the viewing user's formats and timezone. Language and date format are independent settings: English text with German-style dates is the default combination.
 
 ## 12.2 Theme
 
@@ -483,6 +509,19 @@ Light and dark themes, a header switch, persisted per device, defaulting to the 
 - Desktop first; usable on tablet and phone.
 - Keyboard navigation, visible focus, labelled inputs, accessible error messages, sufficient contrast, semantic table markup, accessible dialogs.
 - Every pointer-only interaction has a keyboard alternative.
+
+## 12.4 Language and translation
+
+- All code, comments, identifiers and developer documentation are written in English.
+- Every piece of user-visible text lives in translation catalogs, separate from code. No screen contains hard-coded text.
+- Adding a language means adding a catalog. It requires no code change.
+- English is the default. The admin sets the default language for new users, and each user can choose their own.
+- A missing translation falls back to English. A raw translation key is never shown to a user.
+- Messages that contain values or counts use the translation system's parameters and plural rules. Sentences are never assembled by joining fragments, because word order and plural forms differ between languages.
+- The server reports errors and validation failures as stable codes plus parameters. The interface turns them into translated text. The future API (§17) uses the same codes.
+- The audit log stores codes and values, so each viewer reads it in their own language.
+- User-entered data (client, project, category and tag names, descriptions) is shown as entered and is not translated.
+- Layout tolerates longer text and uses direction-neutral styling, so that right-to-left languages can be added later without redesign.
 
 ---
 
@@ -544,6 +583,8 @@ Light and dark themes, a header switch, persisted per device, defaulting to the 
 - Business rules (time, splitting, rates) live in one place and are shared by every code path.
 - Validation is centralized and reused by create and edit.
 - Table columns and form fields are declared in configuration, not in the order data happens to arrive.
+- The user interface and any future API are both clients of one application service layer. No business rule exists only in screen code (see §17.2).
+- All code and comments are in English (see §12.4).
 
 ## 14.5 Operations
 
@@ -567,6 +608,8 @@ Automated tests are required for:
 - Authentication flows: invite, passkey, admin password with second factor, session revocation, break-glass invite
 - Timer: single timer, stop, stale-timer prompt, stop across midnight
 - Optimistic concurrency conflicts
+- Tags: core versus personal visibility, name matching, promotion and merge
+- Translation: every catalog key used by the interface exists in English, missing translations fall back, plurals and parameters render correctly
 - Accessibility of keyboard flows, and both themes
 
 ---
@@ -582,13 +625,16 @@ These remain undecided. Each has a working default that the specification above 
 | 3 | Super-admin command | Depends on server shell access in the chosen hosting. |
 | 4 | Whether users see the value of their own entries | Yes. |
 | 5 | Client contact fields | Name only in v1. |
-| 6 | UI language | English. |
+| 6 | First additional interface language | None in version 1; English only, with the mechanism ready (§12.4). |
 | 7 | Default timezone for new users | Europe/Berlin, set by the admin at creation. |
 | 8 | Audit-log retention and personal data (users are individuals; entries and the log may hold names and IP addresses) | Keep indefinitely until a policy is set. |
 | 9 | Statutory retention of billing-related records in Germany | Confirm with an accountant. Hard delete is admin-only, and a "locked" hook (`lockedAt`) is reserved. |
 | 10 | Whether an unresolved rate conflict should block saving the entry | No: save, flag, alert the admin. |
 | 11 | Maximum look-back for back-dating | Unlimited in v1. |
 | 12 | Behaviour for a rule saved with an `effectiveFrom` earlier than existing entries | Entries are re-valued by date; any conflicts are flagged. |
+| 13 | Who may create API keys | Admin enables API access per user (default off); the user then manages their own keys. |
+| 14 | API key scopes | Two: read-only, and read plus write time entries. |
+| 15 | Duplicate protection when an API client resubmits an entry | The same `externalRef` from the same user returns the existing entry instead of creating a second one. |
 
 ---
 
@@ -603,11 +649,61 @@ These remain undecided. Each has a working default that the specification above 
 - Expense tracking
 - Offline use and installable (PWA) or local-first apps
 - Email notifications and reminders
-- Free-form per-user tags
 - Additional sign-in providers
+- The public API (§17)
+- Additional interface languages
 
 ---
 
-# 17. Heritage
+# 17. Planned API (designed for now, built later)
+
+## 17.1 Intent
+
+A developer who has built their own time-tracking tool should be able to connect it to TimeTrack with an API key: read the reference data they are allowed to use (clients, projects, categories, tags) and submit time against those clients and projects.
+
+The API is not part of version 1 delivery. Version 1 must not make it hard to add.
+
+## 17.2 Design constraints on version 1
+
+- **One service layer.** Every operation the interface performs (list projects, create an entry, edit an entry, and so on) is an application operation that carries its own validation, authorization and audit. The interface and the future API are both clients of it. Midnight splitting, overlap warnings, rate handling and access control are therefore identical for both.
+- **Stable identifiers.** Records have opaque identifiers that never change and are never reused.
+- **Machine-readable errors.** Failures carry stable codes and parameters (§12.4).
+- **Unambiguous data types.** Timestamps are absolute instants with an explicit offset. Durations are integer minutes. Money is an integer in the smallest currency unit plus a currency code.
+- **Concurrency.** The entry `version` is part of the contract so a client can detect a conflicting change.
+- **Lists** are paginated and filterable by date range, project and similar fields.
+- **Provenance.** Entries record their `source` and may carry an `externalRef`, an identifier from the external tool (§5.7).
+- **Audit.** Writes made through a key are attributed to the user and to the key (§10).
+
+## 17.3 API keys
+
+- A key belongs to one user and **acts as that user**. It sees exactly what that user sees, is bound by the same project and category assignments, and goes through the same validation and splitting. It can never do more than the user.
+- A key has one of two scopes: read-only, or read plus write of time entries.
+- The full key is shown once, at creation. Only a one-way hash is stored.
+- A key has a label, an optional expiry date and a last-used timestamp. The owner or an admin can revoke it at any time. Disabling the user revokes their keys.
+- API access is switched on per user by the admin (default off). The user then manages their own keys.
+- Keys cannot manage users, credentials, assignments, rates or settings.
+- Requests are rate limited. Key creation, revocation and every write are audited. Individual reads are not.
+- Keys are separate from browser sessions and passkeys.
+
+## 17.4 Intended capabilities (first release of the API)
+
+| Area | Operations |
+|---|---|
+| Current user | Read own profile and preferences |
+| Clients, projects, categories | List and read those the user may use |
+| Tags | List core tags and the user's own personal tags |
+| Time entries | List own entries (filter by date, project, category, tag); create, update and delete own entries using start and end, or duration |
+
+Creating an entry with an `externalRef` that the user has already used returns the existing entry, so a client can safely retry. Rates and values are not exposed in the first release. The live timer is not exposed in the first release.
+
+## 17.5 Contract and compatibility
+
+- The API is versioned. A breaking change is a new version.
+- The contract is published as a machine-readable description with examples.
+- Deprecated versions are announced before they are removed.
+
+---
+
+# 18. Heritage
 
 A prototype was built in April–May 2024 as a single-user application, with a database, an HTTP API and a browser interface. It was never deployed and holds no data worth migrating. Its repository will be reviewed after the technology discussion. The detailed reconstruction of that prototype is kept in [docs/brief-v1.md](docs/brief-v1.md).
