@@ -1,53 +1,81 @@
-# TimeTrack — Product Specification
+# TimeTrack — Product Concept v2
 
-**Version:** 2.0 (draft for review)
+**Status:** Draft for review. Technology stack, platforms and implementation plan are not yet decided.
 **Date:** November 2026
-**Status:** Specification only. Technology stack and implementation plan are not yet decided.
-**Supersedes:** the 2024 prototype reconstruction, preserved at [docs/brief-v1.md](docs/brief-v1.md).
+**Supersedes:** Concept v1, the centralized multi-user design, archived at [docs/spec-v1-centralized.md](docs/spec-v1-centralized.md) (git tag `spec-v1-centralized`).
+**Background:** [docs/timetrack_architecture_decisions_2026-11-02.md](docs/timetrack_architecture_decisions_2026-11-02.md) records the brainstorming this concept builds on. Where the two differ, this document is current.
+**Also archived:** the 2024 prototype reconstruction, [docs/brief-v1.md](docs/brief-v1.md).
 
-This document is technology-agnostic. It states what the product does and the rules it must follow, not how it is built.
+This document is technology-agnostic. It states what the product does and the rules it follows, not how it is built.
 
 ---
 
-# 1. Purpose and Scope
+# 1. Purpose, Principles and Scope
 
-TimeTrack is a multi-user time log for a small team of freelancers and contractors working on shared client projects. It replaces the per-client, per-project Google Docs currently used to record hours.
+## 1.1 What TimeTrack is
 
-It starts as a tool for one person (the admin) and grows to include multiple collaborators. Each person logs their own time, and the admin sees everything and can value that time at each person's hourly rate.
+TimeTrack is a local-first, open-source time-tracking system. A standalone installation is fully useful on its own, with no account and no network. Optionally, an installation connects to a **hub** to synchronize a person's devices and to collaborate on shared projects.
 
-**Design philosophy.** Recording and correcting time must take as little effort as possible. A user should be able to open the app, pick a project, enter or start a time record, and see the day's total immediately. Administration stays out of the way. Priorities: **speed, simplicity, accuracy, minimal interruption.**
+The first practical goal is to replace the per-client, per-project Google Docs currently used to record hours: collaborators log their own time, and the project owner sees it without having to ask.
 
-## 1.1 In scope for version 1
+## 1.2 Principles
 
-- Admin-created user accounts with roles, project and category assignment
-- Clients, projects, categories, and tags (admin-maintained core tags plus personal tags any user can create)
-- Three ways to record time: start/end, duration only, live timer
-- Automatic splitting of entries that cross midnight
-- Per-user hourly rates with override rules and full rate history
-- Billable / non-billable flag
-- Search across all entries, with filtering
-- Complete, append-only audit log
-- Per-user preferences (timezone, date format, clock format) and system settings (currency)
-- Light and dark appearance
-- A translatable interface (English by default; see §12.4)
-- A service layer shaped so that a public API can be added without rework (see §17)
+1. **Standalone first.** Every core feature works with no hub and no internet connection.
+2. **Every installation can own projects.** There is no privileged primary installation.
+3. **The hub is optional.** Connecting to one enables device sync and shared-project collaboration. Standalone use never depends on it.
+4. **Open source and independently operable.** Anyone can run a hub. There is no global master hub.
+5. **One writer per record.** Every record has exactly one author with authority over it. Others refer to a record with their own records, never by rewriting it.
+6. **Originals are never rewritten by someone else.** A collaborator's entry stays under the collaborator's control. The owner records adjustments separately.
+7. **The hub arbitrates what only a hub can.** Permissions, visibility and the order of locks are decided at the hub, not by clients.
+8. **Design for the later phases now.** Identifiers, identities and the sync protocol are shaped so that independent hubs and federation need no rewrite.
 
-## 1.2 Explicitly out of scope for version 1
+## 1.3 Design philosophy
 
-- Reporting module (added later; the data model must support it)
-- Invoicing, and tracking what clients are charged
-- Cost-versus-billing rate distinction (only the user rate exists in v1; see §8)
-- Project or task budgets
-- Expense tracking
-- Data export and import
-- Offline use and mobile-specific apps; desktop browsers are the primary platform
-- Email notifications of any kind
-- A public API (designed for in version 1, built later; see §17)
-- Interface languages other than English (the mechanism is in scope, additional translations are not)
+Recording and correcting time must take as little effort as possible. A user should be able to open the app, pick a project, enter or start a time record, and see the day's total immediately. Administration stays out of the way.
 
-## 1.3 Primary platform
+**Priorities: speed, simplicity, accuracy, minimal interruption.**
 
-Desktop browsers. Tablet and phone layouts must remain usable but are not optimized for editing.
+## 1.4 Phases
+
+| Phase | Content |
+|---|---|
+| **1. Standalone** | A local application. No hub, no account, no network. |
+| **2. Single hub** | Sign in to one hub to sync devices and collaborate on shared projects. Changes for offline participants are queued and delivered on reconnection. |
+| **3. Independent hubs** | Multiple operators run their own hubs. Users and devices belong to different hubs. No hub is subordinate to another. |
+| **4. Federation** | Trusted hubs exchange data so people on different hubs can collaborate. |
+
+## 1.5 First milestone
+
+The first usable release is **Phase 1 plus Phase 2**: the standalone app, then one hub. Build order is standalone first, hub and sync second. Standalone is usable throughout.
+
+**In the first milestone:**
+
+- Standalone local app with all single-user features (§8–§12, §14–§18)
+- Hub accounts, sign-in, device sync (§3, §5, §13)
+- Shared projects with invitations, roles and capabilities (§4)
+- Owner-defined rates and effective-dated rate history (§10)
+- Entry versions and owner amendments (§11)
+- Contributor and client invoice locks (§12)
+- Backup and restore (§16)
+- Translatable interface, English by default (§17)
+- A hub operator command line
+
+**Not in the first milestone:**
+
+- Independent hubs and federation (Phases 3 and 4)
+- End-to-end encryption
+- Paid tiers and hosted-hub services
+- A public API (designed for, not built; §20)
+- A reporting module and invoice documents
+- General data import and export (backup and restore only)
+- Email notifications
+- Mobile apps and a web client
+
+**Designed in now so later phases need no rewrite:** identifiers that carry their origin hub; `name@hub` identities; tombstones for deletions; ordering of one person's edits across devices; versioned entries; a versioned sync protocol.
+
+## 1.6 Primary platform
+
+Desktop, macOS first. Windows and Linux are intended but later. Mobile is not in the first milestone, and nothing in the model may assume desktop-only. Platform and technology choices are the next topic and are open.
 
 ---
 
@@ -55,655 +83,968 @@ Desktop browsers. Tablet and phone layouts must remain usable but are not optimi
 
 | Topic | Decision |
 |---|---|
-| Users | Multi-user. Accounts created by an admin only. Unique email per user. |
-| Visibility | Users see only their own entries. Admin sees all. |
-| Project access | Admin assigns users to projects. Users see and log only assigned projects. |
-| Category access | Admin assigns categories to users. Archiving a category is global. |
-| Tags | Core tags maintained by the admin and available to everyone. Any user may also tag an entry with any tag they type (a personal tag, suggested only to its creator and visible to the admin). Names up to 40 characters, up to 10 tags per entry. |
-| Language | All interface text is translatable. Default English. Per-user language preference. |
-| Code language | All code, comments and developer documentation are in English. |
-| API | A future add-on, but designed for from the start. API keys belong to a user and act with that user's permissions. |
+| Product direction | Local-first, open source. Standalone fully works with no hub or network. |
+| First milestone | Local app plus one hub. Standalone first in build order. |
+| Hubs | Optional. Independently operable. No master hub. Federation is last. |
+| Hub identity | A stable internal hub ID plus a changeable DNS name. |
+| User identity | `handle@hub`. Underneath, a permanent opaque user ID. Unique email per hub account. A standalone install has a random local identity, claimed by a hub account when the user joins. |
+| Trust | The hub sees plaintext, protected by TLS, access control, disk encryption and careful logging. No end-to-end encryption in the first milestone. |
+| Project ownership | A single owner per project. |
+| Record authority | Collaborators own their entries. The owner owns the project, clients, categories, shared tags, members, rates, amendments and client invoices. |
+| Collaborator entries | The owner can view them but never rewrite them. |
+| Owner corrections | Separate amendment records that affect the owner's figures only. |
+| Permissions | Project-level capabilities. Roles are presets. Per-person overrides. |
+| Visibility | A collaborator sees only their own entries and rates. Project managers and owners see all entries. |
+| Rates | The project owner defines each member's hourly rate. Immutable, effective-dated, with overrides by client, project and category. |
+| Currency | Per owner, default EUR, locked once any rate exists. Totals in different currencies are never added together. |
 | Time recording | (a) start and end, (b) duration only, (c) live timer. |
 | Display of durations | `hh:mm` everywhere. |
-| Precision | Whole minutes. No rounding, no 15-minute rule. |
+| Precision | Whole minutes. No rounding. Money is rounded half-up to the smallest currency unit once per entry. |
 | Midnight | Entries crossing midnight are split automatically into linked entries. |
-| Timezone | One IANA timezone per user, captured on every entry. |
+| Timezone | One IANA timezone per user preference, captured on every entry. |
 | Description | Required. |
-| Project date | Removed. Derived from the first and last entries. |
-| Rates | Per-user hourly rate, required at user creation, immutable, effective-dated, with optional overrides by client, project, category. |
-| Currency | Global system setting. Default EUR. |
-| Rate conflicts | Never resolved silently. The admin is alerted and decides. |
-| Delete | Clients and projects: archive, or hard delete in a confirmed danger zone. Categories and tags in use can only be archived. |
+| Project date | Derived from the first and last entries. |
+| Invoicing | Locks attach to a closed invoice period, not the calendar month. Two kinds: contributor invoice and client invoice. Invoice documents stay outside TimeTrack. |
+| Late entries | Allowed after a period closes. They are uninvoiced and bill next time. |
+| Reopening an invoice | Allowed, with a mandatory reason, audited, visible to the other party. |
+| Offline | Supported in standalone and for temporarily disconnected hub users. |
+| Conflicts | By design rare. The hub orders locks and permissions. Rejected offline changes are kept visible, never dropped. |
 | Editing | Row-level in-place editing. |
-| Concurrency | Optimistic concurrency on all edits. |
-| Audit | Detailed append-only audit log in version 1. |
-| Notifications | In-app only. Only for a timer left running from a previous day. |
-| Sign-in | Passkeys for everyone. Google sign-in optional (decided later). Admin may also use email and password. |
-| Break-glass | A command-line super-admin procedure that can update admin email, and issue new admin invite link. No web login. |
-| Recovery | Admin re-issues an invite link. |
-| Onboarding | Admin copies an invite link and sends it personally. No outgoing email. |
+| Delete | Archive by default. Danger-zone hard delete where permitted. Invoiced entries are never deleted. |
+| Sign-in | Passkeys through a minimal hub-served page, opened in the system browser. No sign-in in standalone. |
+| Hub operator | A command line on the hub server. No web login. |
+| Translation | All interface text is translatable, English by default. All code and comments are in English. |
+| API | A future add-on, designed for from the start. |
+| Notifications | In-app only. |
 | Timer | One running timer per user. |
-| Entry window | Default view shows the last 60 days (system setting). Search covers all entries viewable by the user |
+| Entry window | Default view shows the last 60 days (a preference). Search covers everything the user may see. |
+| Tags | Shared tags managed by the owner, plus personal tags any user can create by typing them. Visible to the owner and project managers where the entries are visible. Names up to 40 characters, up to 10 per entry. |
 
 ---
 
-# 3. Roles and Access
+# 3. Identity, Hubs and Devices
 
-## 3.1 Roles
+## 3.1 Local identity
 
-| Role | Capabilities |
+A new installation creates a random local identity and a local database. No account is needed. The installation is the owner of everything created in it.
+
+## 3.2 Hub
+
+A hub has a permanent internal **hub ID** and a current **DNS name** (for example `time.twinpictures.de`). The name is a namespace for the hub's users and must be stable. Keeping the ID separate allows a later move to a new name.
+
+## 3.3 Account
+
+A hub account has:
+
+- a permanent, opaque **user ID**
+- a **handle**, unique within the hub, shown as `handle@hub`
+- a **display name**
+- an **email address**, unique within the hub, used for invitations and recovery, not part of the identity and changeable
+- a status: active or disabled
+
+The same email may have accounts on different hubs.
+
+**Claiming.** When a standalone user joins a hub, the local identity becomes linked to the new account. Existing local data keeps its identifiers and remains private until the user chooses to sync or share it.
+
+## 3.4 Devices
+
+A person may use several devices. Each has a device ID. Devices of one person converge through the hub. A device can be revoked, which stops its future sync (§13.8).
+
+## 3.5 Identifiers
+
+Every record has an identifier that is:
+
+- unique across installations and hubs
+- created on the device that creates the record, so no round trip is needed
+- stable and never reused
+- roughly ordered by creation time
+- origin-aware (it names the hub or installation of origin)
+
+---
+
+# 4. Roles and Permissions
+
+## 4.1 Two levels
+
+- **Hub level.** Who may have an account, and hub-wide policy. Managed by the **hub operator** (§5.5).
+- **Project level.** What each member can do within a project. Managed by the project owner and those they delegate to.
+
+There is no single "admin" who sees everything. A person is an owner of their own projects, a member of others'.
+
+## 4.2 Project capabilities
+
+Access is a set of **capabilities** on a project. Roles are convenient presets, and any person can have individual overrides.
+
+| Capability | Meaning |
 |---|---|
-| **User** | Log, edit and delete own entries on assigned projects and categories. Run own timer. View own entries, own rates and own values. Edit own preferences. |
-| **Admin** | Everything a user can do, plus: manage users, clients, projects, categories, tags, assignments, rates and system settings. View and edit all users' entries. View the audit log. Resolve rate conflicts. |
-| **Super-admin** | Not an application account. A command-line procedure on the server (see §4.5). Creates admin accounts, updates admin email, and re-issues admin invites. |
+| `entries.viewOwn` | See own entries and own rates (always granted to a member) |
+| `entries.logOwn` | Create, edit and delete own entries |
+| `entries.viewAll` | See all members' entries |
+| `amend` | Create owner amendments (§11) |
+| `rates.viewAll` | See all members' rates and values |
+| `rates.manage` | Define rates and resolve rate conflicts |
+| `members.invite` | Invite people to the project |
+| `members.manage` | Change members' roles, capabilities and removal |
+| `project.edit` | Edit project settings, categories and shared tags |
+| `invoices.close` | Close client invoices |
+| `invoices.reopen` | Reopen client invoices |
+| `project.archive` | Archive and restore the project |
+| `project.delete`, `project.transfer` | Delete the project; transfer ownership (owner only) |
 
-Only the super-admin procedure creates admins. Admins create ordinary users.
+## 4.3 Presets
 
-## 3.2 Visibility rules
+| Capability | Collaborator | Project manager | Owner |
+|---|---|---|---|
+| `entries.viewOwn`, `entries.logOwn` | ✔ | ✔ | ✔ |
+| `entries.viewAll` | | ✔ | ✔ |
+| `members.invite`, `members.manage` | | ✔ | ✔ |
+| `project.edit` | | ✔ | ✔ |
+| `amend`, `rates.viewAll`, `rates.manage` | | | ✔ |
+| `invoices.close`, `invoices.reopen` | | | ✔ |
+| `project.archive` | | | ✔ |
+| `project.delete`, `project.transfer` | | | ✔ (not delegable) |
 
-- A user sees only their own entries and rates, never another user's.
-- A user sees only projects and categories assigned to them.
-- A user sees core tags and their own personal tags, never another user's personal tags. An admin sees any tag attached to an entry they can view.
-- Existing entries remain visible to their owner even if the project or category is later unassigned or archived.
-- An admin's project page lists all users' entries, grouped by date and then by user, with a user filter.
+The owner may grant any delegable capability to anyone as an override, for example `invoices.close` to a project manager.
 
-## 3.3 Enforcement
+## 4.4 Visibility rules
 
-All access rules are enforced at the service layer. Hiding navigation items is never sufficient.
+- A collaborator sees only their own entries and only their own rates and values.
+- A project manager sees all entries on the project, but not rates unless granted.
+- Shared tags, categories and the project's client name are visible to all members.
+- Personal tags are visible to their creator, and to the owner and anyone with `entries.viewAll` on entries they can see.
+- The restriction applies identically on every device and in every API client.
+
+## 4.5 Enforcement and its limits
+
+- Permissions are enforced by the **hub**, which filters what each person receives and rejects changes they aren't entitled to make. Clients also enforce them for usability, but the hub is the authority.
+- Data already synced to a device **cannot be recalled**. Revoking access, removing a member or disabling an account stops future sync only.
+- Capability changes are applied by the hub in the order it receives them. A change made offline under a capability that has since been withdrawn is rejected on arrival (§13.6).
+
+## 4.6 Hub policy
+
+The hub operator decides policy for the hub: who may create accounts (default: only the operator), and whether ordinary users may create projects (default: yes). Cross-hub policy belongs to Phase 4.
+
+## 4.7 Invitations
+
+1. An owner or a person with `members.invite` invites an existing hub account to a project by handle, choosing a preset.
+2. Until accepted, the invitee sees only the invitation.
+3. On acceptance, the project's reference data and the invitee's entitled data are synced to their devices.
+4. The owner or a person with `members.manage` can change or remove a member. Removal stops future sync. The former member keeps their own entries as read-only history and cannot add new ones. Their entries remain visible to the owner.
 
 ---
 
-# 4. Authentication and Accounts
+# 5. Hub Accounts and Authentication
 
-## 4.1 Account creation (invite flow)
+None of this applies in standalone mode. There is no sign-in, no account and no password locally.
 
-1. The admin creates a user: email (unique, case-insensitive), display name, role, timezone, **base hourly rate**, project and category assignments.
-2. The system produces a one-time invite link. The admin copies it and sends it to the person. The system sends no email.
-3. The invitee opens the link and registers a sign-in method (§4.2).
-4. The invite expires after a short fixed period and can be reissued by the admin.
+## 5.1 Creating accounts
 
-## 4.2 Sign-in methods
+1. The hub operator creates an account (handle, display name, email) with the command line.
+2. The system produces a one-time **invite link**. The operator copies it and sends it personally. The hub sends no email.
+3. The invitee opens the link in a browser on a minimal hub page and registers a sign-in method.
+4. The invite expires after a short period and can be reissued.
 
-| Method | Who | Notes |
+## 5.2 Sign-in
+
+- **Passkeys** are the baseline for everyone. They are tied to the hub's web address, so sign-in happens on a minimal page served by the hub and opened in the system browser. The page then returns the user to the local app.
+- The hub serves only: sign-in, invite acceptance and passkey registration, device pairing and approval, and recovery. It does not serve the application, entries, rates or administration.
+- Google sign-in remains an optional later addition.
+- Whether a password-based method is offered is open (§22).
+
+## 5.3 Devices and sessions
+
+- After sign-in, a device holds a long-lived credential in the operating system's secure storage and can work offline.
+- Each device can be revoked. Disabling an account revokes all its devices.
+- Sign-ins, failed sign-ins, device pairing and revocation are recorded in the hub's log.
+
+## 5.4 Account states
+
+- **Active** and **disabled**. A disabled account cannot sync. Its data remains.
+- An account that owns data is never hard-deleted. An account with no data and no references may be removed by the operator.
+
+## 5.5 Hub operator command line
+
+- A command run on the hub's server, with no network-facing login.
+- It can: create an account, update an account's email, issue a fresh invite link, disable and re-enable an account.
+- Every use is recorded in the hub's log.
+- This is also the recovery path for a person who has lost all sign-in methods.
+- The operator necessarily has access to the server and therefore to the data it holds (§6).
+
+---
+
+# 6. Trust and Data Handling
+
+## 6.1 Hub trust model
+
+For the first milestone the hub is **trusted with plaintext**. Whoever can read the hub's disk, database, backups or logs can read the data. TLS protects data on the network. Access control protects it from other users. Neither protects it from the operator or from a breach.
+
+This is acceptable when a person runs the hub for themselves and people they know. It becomes a real cost when others operate hubs on your behalf (Phase 3).
+
+## 6.2 Data the hub holds
+
+| Category | Contents | Sensitivity |
 |---|---|---|
-| **Passkey** | Everyone | Baseline method. At least one method is always required. |
-| **Google (OpenID Connect)** | Everyone, optional | Matched on the verified email address, then pinned to the provider's stable subject identifier. Whether v1 ships this is decided with the stack. |
-| **Email + password** | Admin only | Requires a second factor (TOTP). Passwords are stored only as strong salted hashes. |
+| Accounts | Handle, display name, email, language and timezone, passkey public keys, devices | Medium |
+| Project structure | Client, project and category names, descriptions, shared tags, membership and capabilities | Medium to high |
+| Time entries | Project, category, dates and times, minutes, timezone, tags, billable flag, versions, split links | Medium |
+| Entry descriptions | Free text, which often contains confidential client detail | **Highest** |
+| Rates, amendments, invoices | Hourly rates, owner adjustments and notes, invoice snapshots | High |
+| Sync and audit metadata | Event IDs, authors, device IDs, timestamps, tombstones, access logs with IP addresses | Medium |
 
-There is no self-registration and no public sign-up.
+**Never sent:** private passkey keys, data that is not synced, and data the recipient isn't entitled to.
 
-## 4.3 Sessions
+## 6.3 Required mitigations
 
-- Long-lived sessions suited to a daily-use desktop tool (for example 30 days, sliding).
-- Disabling a user or changing their role revokes all of their sessions immediately.
-- Every sign-in, failed sign-in, sign-out, session revocation and credential change is recorded in the audit log.
+- Full-disk encryption on the hub server, and encrypted backups
+- Logs never contain descriptions or rates
+- A documented rule for operator access
+- A versioned protocol so field-level encryption can be added later, with entry descriptions as the first candidate
 
-## 4.4 Account states
+## 6.4 Federation trust (Phase 4)
 
-- **Active**: can sign in.
-- **Disabled**: cannot sign in; data retained.
-- Users who own entries are never hard-deleted. Disable them instead. A user with no entries and no audit references may be removed by an admin with confirmation.
-
-## 4.5 Break-glass: super-admin procedure
-
-- A command run on the server, with no network-facing login.
-- It can only:
-  - create an admin account
-  - update admin email address
-  - issue a fresh admin invite link
-  - nothing else
-- It has no access to clients, projects, entries or rates.
-- Every use is written to the audit log with the actor shown as the super-admin procedure.
-- This is the only recovery path for an admin who has lost all sign-in methods.
+Trust between hubs is **explicit and directional**: hub A trusting hub B does not mean B trusts A. Hub operators establish and control it. Once a hub operator has authorized federation under a policy, users can collaborate across those hubs without approval for each interaction. Hub trust enables collaboration but never replaces project invitations and permissions. Identity, discovery, transport, revocation and queued-change handling are not yet designed.
 
 ---
 
-# 5. Domain Model
+# 7. Domain Model
 
-Field lists are logical. Types and storage are left to the implementation.
+Field lists are logical. Storage is left to the implementation.
 
-## 5.1 User
+## 7.1 Who owns what
 
-`id`, `email` (unique), `displayName`, `role` (user | admin), `status` (active | disabled), `timezone`, `language`, `dateFormat`, `clockFormat` (24h | 12h), `apiAccess` (boolean, default off), `createdAt`, `lastLoginAt`.
+| Record | Authority |
+|---|---|
+| Time entry, entry versions, personal tags, contributor invoice | The **author** (the member who logged the time) |
+| Project, client, category, shared tag, membership, rate rule, amendment, client invoice | The **project owner**, or a delegate holding the capability |
+| Account, profile, preferences | The **user** |
 
-## 5.2 Client
+A record is changed only by its authority. Others record their own view in separate records.
 
-`id`, `name`, `status` (active | archived). Additional contact fields are deferred.
+## 7.2 Client
 
-One client has many projects.
+`id`, `ownerId`, `name`, `status` (active | archived). Contact fields are deferred. One client has many projects.
 
-## 5.3 Project
+## 7.3 Project
 
-`id`, `clientId`, `name`, `description`, `status` (active | archived), `billableDefault` (boolean).
+`id`, `ownerId`, `clientId`, `name`, `description`, `status` (active | archived), `billableDefault`.
 
-Derived, not stored: first entry date, latest entry date, total time.
+Derived, not stored: first and latest entry date, total time.
 
-A project belongs to exactly one client. A client can be reassigned by an admin; the change is audited.
+## 7.4 Category
 
-## 5.4 Category
+`id`, `ownerId`, `name`, `status`. A category describes a type of work and carries no rate. Categories belong to the owner and are enabled per project. Members may use the categories enabled on their projects.
 
-`id`, `name`, `status` (active | archived).
+## 7.5 Tag
 
-A category describes a type of work. It carries no rate. Rates are defined separately (§8).
+`id`, `name`, `kind` (shared | personal), `ownerId` (the owner for shared tags, the user for personal tags), `status`.
 
-## 5.5 Tag
-
-`id`, `name`, `kind` (core | personal), `ownerUserId` (personal tags only), `status` (active | archived).
-
-- **Core tags** are maintained by the admin and available to every user.
-- **Personal tags** are created by any user simply by typing a new tag on an entry. They are suggested only to their creator. Other users never see them. The admin can see all personal tags, in tag review and on entries.
-- A tag name is 1–40 characters, trimmed, and unique ignoring case within the core set and within each user's personal set. If a user types a name that matches a core tag, the core tag is used.
+- **Shared tags** are managed by the project owner and available to members of their projects.
+- **Personal tags** are created by anyone by typing a new tag on an entry. They are suggested only to their creator.
+- A tag name is 1–40 characters, trimmed, unique ignoring case within the shared set and within each person's personal set. A name matching a shared tag uses the shared tag.
 - An entry may carry up to 10 tags.
-- The admin can **promote** a personal tag to a core tag. Personal tags with the same name belonging to other users are merged into it, and their entries are re-linked. The change is audited.
-- A user can rename or archive their own personal tags, and delete them when unused.
+- The owner can promote a personal tag to a shared tag.
+- A person can rename or archive their own personal tags, and delete them when unused.
 
-## 5.6 Assignments
+## 7.6 Membership
 
-- **UserProject**: which users may log time on which projects.
-- **UserCategory**: which categories each user may select.
+`projectId`, `userId`, `preset`, capability overrides, `status` (invited | active | removed), invited-by, timestamps.
 
-Removing an assignment never alters existing entries or rate rules.
-
-## 5.7 Time Entry
+## 7.7 Time entry
 
 | Field | Description |
 |---|---|
-| `id` | Unique identifier |
-| `userId` | Owner |
-| `projectId` | Project |
-| `categoryId` | Category |
+| `id` | Identifier (§3.5) |
+| `authorId` | The author |
+| `projectId`, `categoryId` | Project and category |
 | `kind` | interval, duration, or running |
-| `workDate` | Calendar date the work belongs to, in the entry's timezone |
-| `timezone` | The owner's timezone at the time of entry |
-| `startAt`, `endAt` | Absolute instants (interval and running kinds) |
-| `minutes` | Duration in whole minutes. **Derived** from `startAt`/`endAt` for intervals; stored data for duration-only entries |
-| `description` | Required text (required at stop for running timers) |
-| `billable` | Boolean; defaults from the project, overridable |
-| `tags` | Zero to ten tags, core or personal |
-| `source` | Where the entry came from: web, or api (reserved for §17) |
-| `externalRef` | Optional identifier supplied by an external tool, unique per user when present (reserved for §17) |
-| `splitGroupId` | Shared by linked halves of a midnight split |
-| `version` | Optimistic-concurrency counter |
-| `createdAt`, `updatedAt` | Timestamps |
-| `lockedAt` | Reserved for a future "billed / period locked" rule; v1 has no locking UI |
+| `workDate` | Calendar date in the entry's timezone |
+| `timezone` | The author's timezone when the entry was made |
+| `startAt`, `endAt` | Absolute instants (interval and running) |
+| `minutes` | Whole minutes. Derived from the instants for intervals; stored for duration-only entries |
+| `description` | Required (at stop for a timer) |
+| `billable` | Defaults from the project, overridable |
+| `tags` | Zero to ten |
+| `splitGroupId` | Shared by linked pieces of a midnight split |
+| `version` | Increases with every edit (§11.1) |
+| `deleted` | Deletion marker (tombstone) |
+| `contributorInvoiceId`, `clientInvoiceId` | Invoice locks (§12) |
+| `source`, `externalRef` | Provenance and an external tool's identifier (reserved for §20) |
+| `createdAt`, `updatedAt` | Device time and hub-received time |
 
-## 5.8 Rate Rule
+## 7.8 Amendment
 
-See §8.
+See §11.2.
 
-## 5.9 Audit Event
+## 7.9 Rate rule
 
 See §10.
 
-## 5.10 System Settings
+## 7.10 Invoice
 
-`currency` (default EUR; locked once any rate exists), `entryWindowDays` (default 60), `defaultTimezone`, `defaultLanguage` (default English), default `dateFormat` and `clockFormat` for new users.
+See §12.
+
+## 7.11 Change history
+
+Every create, edit, archive, delete, lock and permission change is kept as an append-only history identifying the author, the device, the device time and the hub-received time, with previous and new values. Authors see the history of their own records. Owners see the history of entries on their projects.
+
+## 7.12 Settings
+
+Per installation: language, timezone (IANA), date format, clock format (24h | 12h), theme, entry window (days). Per owner: currency (default EUR).
 
 ---
 
-# 6. Time Recording
+# 8. Time Recording
 
-## 6.1 The three ways to record
+## 8.1 Three ways to record
 
-**A. Start and end.** The user enters a start time and an end time (and optionally a date, default today). Duration is calculated.
+**A. Start and end.** Enter start and end times (and optionally a date, default today). Duration is calculated.
 
-**B. Duration only.** The user enters a duration as `hh:mm` and a date (default today). Start and end are left empty. The entry shows "–" in the From and To columns.
+**B. Duration only.** Enter a duration as `hh:mm` and a date (default today). Start and end stay empty and show "–" in the From and To columns.
 
-**C. Live timer.** See §7.
+**C. Live timer.** See §9.
 
-All three produce the same kind of entry, appear in the same tables, and can be edited later.
+All three produce the same kind of entry and can be edited later.
 
-## 6.2 Required and optional fields
+## 8.2 Fields
 
-Required: project, category, description, and either (start and end) or a duration. Optional: date (default today), tags (a core tag, or any new tag typed in), billable flag (defaults from the project).
+Required: project, category, description, and either (start and end) or a duration. Optional: date (default today), tags, billable flag (defaults from the project).
 
-## 6.3 Dates and timezones
+## 8.3 Dates and timezones
 
-- Entries default to today in the user's timezone.
-- Entries may be back-dated and existing entries may be modified.
+- Entries default to today in the user's timezone and may be back-dated. Existing entries may be modified until locked (§12).
 - Entries dated or ending in the future are rejected.
-- `workDate` is a plain calendar date computed in the entry's stored timezone. Changing a user's timezone setting affects only entries created afterwards; existing entries keep their original timezone and date.
-- Where a wall-clock time is ambiguous (the repeated hour at the end of daylight-saving time) the first occurrence is used.
+- `workDate` is a plain calendar date computed in the entry's stored timezone. Changing the timezone preference affects only later entries.
+- An ambiguous wall-clock time (the repeated hour when daylight-saving time ends) uses the first occurrence.
+- Device clocks may be wrong. The hub also records when it received an entry. The future-entry check uses the device clock locally and the hub's received time with a tolerance on arrival.
 
-## 6.4 Validation
+## 8.4 Validation
 
 - End must be after start. Zero and negative durations are rejected.
-- An interval may not exceed 24 hours.
-- A duration-only entry must be at least one minute and at most 24 hours.
-- Category and project must be assigned to the user and not archived (archived items cannot be chosen for new entries).
-- **Overlaps:** if an interval overlaps another interval of the same user, the system warns and allows the save. Overlaps are never checked across users, and duration-only entries never take part.
-- All rules are enforced on the server, regardless of client-side checks.
+- An interval may not exceed 24 hours. A duration-only entry must be between one minute and 24 hours.
+- The project and category must be available to the author and not archived.
+- **Overlaps:** if an interval overlaps another interval of the same person, the app warns and allows the save. This covers all of that person's projects. Duration-only entries never take part. Different people overlapping is normal.
+- The hub re-validates every rule on arrival (§13.6).
 
-## 6.5 Midnight splitting
+## 8.5 Midnight splitting
 
-When an interval crosses midnight in the entry's timezone, the system splits it automatically into one entry per calendar day:
+When an interval crosses midnight in the entry's timezone, it is split automatically into one entry per calendar day:
 
-- Example: 23:00 to 02:00 becomes 23:00–24:00 on the first day and 00:00–02:00 on the next day.
-- The pieces share a `splitGroupId` and show a visible link indicator.
+- 23:00 to 02:00 becomes 23:00–24:00 on the first day and 00:00–02:00 on the next.
+- The pieces share a `splitGroupId` and show a visible link.
 - Description, category, project, tags and billable flag are the same on each piece.
-- The pieces are treated as one logical span when edited: the user changes the start of the first piece or the end of the last piece, and the system re-splits. If the edit removes the midnight crossing, the pieces merge into one entry.
-- Deleting one piece deletes the whole group, after a confirmation that says so.
+- Editing treats the group as one span: change the start of the first piece or the end of the last, and the pieces are re-split. If the crossing disappears, they merge.
+- Deleting one piece deletes the group, after a confirmation that says so.
+- If one piece is locked by an invoice, the locked piece is frozen and the other can be edited, but not in a way that moves the midnight boundary (§12.8).
 
-## 6.6 Keyboard behaviour (new entry form)
+## 8.6 Entry form
 
-The form is a compact single row on wide screens and wraps on narrow ones.
+- A compact single row on wide screens, wrapping on narrow ones.
+- **Enter** in the description submits, **Shift+Enter** inserts a new line.
+- After saving, the form clears, the table and daily totals update immediately, and focus returns to the first field.
+- **Smart defaults:** the start time is proposed as the end of the previous entry that day, and the category as the last one used on the project.
 
-- **Enter** in the description field submits. **Shift+Enter** inserts a new line.
-- After saving, the form clears, the table and daily totals update without reloading, and focus returns to the first field.
+## 8.7 Feedback
 
-**Smart defaults** (to minimize typing): the start time is proposed as the end of the user's previous entry that day, and the category as the last one used on this project.
-
-## 6.7 Feedback
-
-The user receives clear feedback on success, validation failure, server rejection, network failure and version conflicts. Failed saves never discard what the user typed.
+Clear feedback on success, validation failure, rejection on sync and version conflicts. A failed save never discards what the user typed.
 
 ---
 
-# 7. Live Timer
+# 9. Live Timer
 
-- Each user may have at most **one** running timer.
-- Start: choose project and category (description and tags optional at this point). The system records the start time. The timer is stored on the server, so it survives closing the browser and works across devices.
-- While running, a persistent indicator with elapsed time is visible in the header.
-- Stop: the user confirms the description (required) and may adjust tags and billable flag. The system records the end time, and the entry becomes an ordinary interval. If it crosses midnight, it is split (§6.5).
-- Start and stop times are captured to the minute, so durations are always whole minutes.
+- A person has at most **one** running timer. The timer lives on the device and syncs with the person's other devices.
+- Start by choosing project and category. Description and tags are optional at this point.
+- A persistent indicator with elapsed time is visible in the header.
+- Stop: the description is confirmed (required). The entry becomes an ordinary interval and is split if it crosses midnight.
+- Start and stop times are captured to the minute.
 - A start control may appear on each dashboard project card.
-
-## 7.1 Timer left running from a previous day
-
-At the next sign-in or page load, the user sees an in-app prompt. They enter the real stop time and the description, and the entry is saved (and split if needed). They can also discard the timer. This prompt is the only notification in v1.
+- When two offline devices each start a timer, the rule "one at a time" is reconciled at sync, and the person is prompted.
+- **Stale timer.** A timer left running from a previous day prompts the person at next launch to enter the real stop time and description, or discard it. This is the only notification in the first milestone.
 
 ---
 
-# 8. Rates and Valuation
+# 10. Rates and Valuation
 
-## 8.1 Concept
+## 10.1 Concept
 
-A **rate** is the hourly value of one user's time. What the client is ultimately charged is not tracked. In v1 there is a single rate family, the user rate. Cost and billing rates are possible later extensions.
+A **rate** is the hourly value of one member's time, defined by the project owner. What the owner's client is charged is not tracked.
 
-Only the admin defines rates. A user sees only their own rates and values; nobody sees another user's.
+- The owner defines each member's rates. A member sees only their own.
+- A member who works for several owners has separate rate sets per owner.
+- Rates belong to the owner's namespace and use the owner's currency (§7.12).
 
-## 8.2 Rate rules
+## 10.2 Rate rules
 
 A rate rule contains:
 
-- `userId` (always required)
+- `ownerId` and `userId` (the member)
 - optional `clientId`, `projectId`, `categoryId`
-- `amount` (hourly, in the system currency)
-- `effectiveFrom` (a date; the first rule for a user applies "from the beginning")
+- `amount` (hourly)
+- `effectiveFrom` (a date; the first rule for a member applies "from the beginning")
 - who created it and when
 
-Rules are **immutable**. A rate is never edited. To change one, the admin adds a new rule with a later `effectiveFrom`. The previous rule is considered ended by the new one.
+Rules are **immutable**. To change a rate, add a rule with a later `effectiveFrom`. The previous rule ends where the next begins.
 
-Every user has a **base rate**: a rule with only `userId`. It is required when the user is created. There is no system-wide default rate.
+Every member has a **base rate**: a rule with only the member set. It is required when a collaborator is first added to an owner's projects. An owner's own time may have no rate; such entries show "no rate", never zero. There is no system-wide default.
 
-## 8.3 Resolving the rate for an entry
+## 10.3 Resolving the rate for an entry
 
-For an entry with a user, client (via its project), project, category and `workDate`:
+For an entry with a member, client (via the project), project, category and `workDate`:
 
-1. For each distinct scope (the combination of user, client, project and category fields that are set), take the rule with the latest `effectiveFrom` on or before the `workDate`.
+1. For each distinct scope (the combination of fields that are set), take the rule with the latest `effectiveFrom` on or before the `workDate`.
 2. Keep the scopes whose set fields all match the entry.
-3. If one scope is **more specific** than all others, use its rate. Scope A is more specific than scope B when everything A matches is also matched by B. A project rule is therefore more specific than its client's rule, and a rule with more fields set is more specific than one with a subset of those fields.
-4. If no scope is more specific than all others, there is a **conflict** (§8.5).
-5. The base rate is the fallback when no override matches.
+3. If one scope is **more specific** than all others, use it. Scope A is more specific than B when everything A matches is also matched by B. A project rule is more specific than its client's rule, and a rule with more fields is more specific than one with a subset of them.
+4. If no scope is more specific than all others, there is a **conflict** (§10.5).
+5. The base rate is the fallback.
 
-Rates are looked up by the entry's work date, not by when it was entered, so back-dated entries use the rate in force on that date.
+Rates are looked up by the entry's work date, not when it was entered.
 
-## 8.4 Entry value
+## 10.4 Entry value
 
-`value = minutes × hourlyRate / 60`, rounded half-up to the smallest currency unit **once per entry**. Totals are always the sum of entry values, so a total always equals the sum of the visible lines.
+`value = minutes × hourlyRate / 60`, rounded half-up to the smallest currency unit **once per entry**. Totals are the sum of entry values. Billable status does not change value; it marks whether hours are billable to the client.
 
-Billable status does not change value. It only marks hours as billable to the client for later reporting.
+Values of invoiced entries come from the invoice snapshot (§12.4), not from current rates.
 
-## 8.5 Conflicts
+## 10.5 Conflicts
 
-A conflict exists when two or more matching rules overlap and neither is more specific than the other. Example: for Doug, "Development" at €120 and "client Acme" at €110 both match Doug logging Development for Acme.
+A conflict exists when matching rules overlap and neither is more specific. Example: "Development" at €120 and "client Acme" at €110 both match Doug logging Development for Acme.
 
-- Conflicts are an edge case. They are never resolved silently or by a hidden priority order.
-- When the admin saves a rule that would create a conflict, the system says so and asks for the rate of the combined case (Doug + Acme + Development), which is more specific than both and resolves it.
-- If an entry is saved while a conflict exists (for example, due to a back-dated rule), the entry is flagged **rate conflict**, excluded from value totals, and the admin sees an alert in the admin navigation until it is resolved.
-- Every conflict resolution is audited.
+- Conflicts are an edge case, never resolved silently or by a hidden priority order.
+- When the owner saves a rule that would create one, the app says so and asks for the rate of the combined case (Doug + Acme + Development), which resolves it.
+- If an entry is saved while a conflict exists (for example after a back-dated rule), it is flagged **rate conflict**, excluded from value totals, and the owner sees an alert until it is resolved.
+- Every resolution is recorded in the history.
 
-## 8.6 Rate table
+## 10.6 Rate table
 
-The admin has a table per user showing the **current** rate and all overrides, with each rule's effective date and an expandable history.
+The owner has a table per member showing the current rate, all overrides, and an expandable history with effective dates.
 
-## 8.7 Worked examples (test vectors)
+## 10.7 Worked examples
 
-Base rates: Doug €100/h, Steffen €70/h.
+Base rates set by owner Baden: Doug €100/h, Steffen €70/h.
 
 | Case | Result |
 |---|---|
-| Doug, 90 min, base rate only | 90 × 100 / 60 = **€150.00** |
+| Doug, 90 min, base rate | 90 × 100 / 60 = **€150.00** |
 | Steffen, 20 min | 20 × 70 / 60 = 23.333… → **€23.33** |
 | Steffen, 25 min | 25 × 70 / 60 = 29.1666… → **€29.17** |
-| Doug base €100 until 2027-01-01, then €110 (new rule dated 2027-01-01). Entry on 2026-12-31 | **€100** rate |
-| Same, entry on 2027-01-01 | **€110** rate |
-| Doug + Development = €120, Doug + project Acme/Website = €115. Doug logs Development on Acme/Website | **Conflict** (neither scope contains the other) |
-| Add Doug + Acme/Website + Development = €130, then log the same entry | **€130** rate |
+| Doug base €100 until 2027-01-01, then €110. Entry on 2026-12-31 | **€100** |
+| Same, entry on 2027-01-01 | **€110** |
+| Doug + Development = €120, Doug + project Acme/Website = €115. Doug logs Development on Acme/Website | **Conflict** |
+| Add Doug + Acme/Website + Development = €130, then the same entry | **€130** |
 | Doug + client Acme = €110, Doug + project Acme/Website = €115. Doug logs on Acme/Website | **€115** (project is more specific than client) |
 
 ---
 
-# 9. Screens
+# 11. Entry Versions and Owner Amendments
 
-## 9.1 Dashboard
+## 11.1 Entry versions
 
-- A responsive grid of cards for the user's active, assigned projects.
-- Card: project name, client name, description (truncated gracefully). The whole card is a link; a timer start control may be present.
-- Keyboard and pointer accessible.
-- Empty state: for a user with no assigned projects, a message to ask the admin; for an admin, a path to create the first client and project.
+Each edit of an entry creates a new **version**. Earlier versions are kept in the history. Authors see their own history, and owners see the history of entries on their projects. This is what lets an invoice pin exactly what was billed (§12).
 
-## 9.2 Project time page
+## 11.2 Amendments
 
-Title shows the project name. Two parts:
+An owner (or a person with `amend`) may need a different figure from what the collaborator recorded, for example 3:00 instead of 3:30. The owner **cannot rewrite the entry**. Instead the owner records an **amendment**:
 
-1. **New entry form** (§6), with a mode switch for start/end, duration, or timer.
-2. **Entries**, grouped by date, newest first, one table per date. The group header shows the date in the user's date format and the day's total in `hh:mm`.
+- `entryId` and the entry version it refers to
+- `adjustedMinutes` and/or a `billable` override
+- a required `reason`
+- author, timestamps, and a status (active | withdrawn)
 
-Only the last `entryWindowDays` days are loaded by default, with a control to load older entries. Admins see all users' entries, with a user column and filter.
+The **effective** figure for the owner's reports is the original entry combined with its latest active amendment. Amendments are append-only. A new one supersedes the previous.
 
-Columns: From, To, Duration (`hh:mm`, read-only), Category, Description, Tags, Billable, and (for the entry's owner and admin) Value. From and To show "–" for duration-only entries. A split entry shows its link.
+## 11.3 Rules
 
-Empty state: "No time entries have been recorded for this project." An empty project is a normal state, not an error.
-
-## 9.3 Row-level editing
-
-- Activating a cell (click or double-click) puts the **whole row** into edit mode, with focus in the chosen cell.
-- **Enter** saves, **Esc** cancels. Save and Cancel buttons are always visible.
-- The row is validated as a whole and saved in a single update (one audit event, one version change).
-- **Tab** moves between fields within the row; leaving the row without saving asks whether to keep or discard changes.
-- Duration is read-only on interval rows. Editing start and end recalculates it, splits or merges across midnight as needed, and updates the daily totals.
-- Touch devices get an explicit Edit button on each row that opens the same mode.
-- A save error keeps the row open with the edited values, shows the error, and lets the user retry or cancel. The last saved values are never overwritten.
-- If another save has changed the entry since it was loaded (version conflict), the user is told and offered a reload.
-- Editable fields: date, start, end (or duration for duration-only entries), category, description, tags, billable flag.
-
-## 9.4 Search
-
-- Searches **all** entries, not only the recent window.
-- Free-text search over descriptions, with filters for client, project, category, tag, billable flag, date range and (admin only) user.
-- Results show the total time and, where the viewer may see it, the total value for the filtered set.
-- Results open for editing in the same way as the project page.
-
-## 9.5 Administration screens (admin)
-
-- **Users**: create, edit, disable, re-issue invite, assign projects and categories, rate table (§8.6).
-- **Clients**, **Projects**, **Categories**: create, edit, archive, hard delete where permitted.
-- **Tags**: create, edit and archive core tags; review personal tags with their owners and usage; promote a personal tag to core.
-- **System settings**: currency, entry window, defaults for new users.
-- **Rate conflicts**: list of unresolved conflicts with a resolve action.
-- **Audit log**: browse and filter (§10).
-
-## 9.6 Navigation
-
-Persistent navigation: Dashboard, Projects, Search, and (admin) Administration. A user menu with profile and preferences, theme switch, and sign-out. The current location is identifiable, and menus are keyboard accessible.
+- An amendment affects only the owner's accounting. It never changes the author's entry, the author's invoice, or the author's own totals.
+- Authors can see that an amendment exists, with the adjusted figure and reason, read-only (§22).
+- An amendment to an entry already on a closed client invoice does not alter that invoice. It takes effect as an adjustment in the next open period.
+- If the author edits an entry after an amendment, the amendment is shown as **refers to an earlier version**, and the owner decides whether to keep or withdraw it.
+- Provenance is always preserved: the original assertion, each edit, and each amendment.
 
 ---
 
-# 10. Audit Log
+# 12. Invoicing and Locks
 
-## 10.1 Properties
+TimeTrack does not produce invoice documents. It records that a set of hours has been invoiced, and locks it.
 
-- **Append-only.** No screen or operation edits or deletes audit events.
-- Detailed enough to reconstruct who changed what, when, and from what to what.
+## 12.1 Two kinds of invoice
 
-## 10.2 Event content
+| | Contributor invoice | Client invoice |
+|---|---|---|
+| Issued by | The member who logged the time | The project owner (or a holder of `invoices.close`) |
+| Covers | That member's own entries only | All members' entries on the chosen projects |
+| Recipient | One project owner | One client |
+| Multiple projects | Yes, if they share the same owner | Yes, if they share the same client |
+| Period | Any date range, a calendar month by default | Same |
+| Value | Minutes × the rate the owner set for that member | Minutes and values with owner amendments applied |
+| Reopened by | The issuer, with a reason | The owner (or holder of `invoices.reopen`), with a reason |
 
-Each event records: timestamp, actor (user, or the super-admin procedure), the session or the API key used, the entity type and ID, the action, the previous and new values (field-level changes), and a reason or comment where one was supplied.
+An entry can be in at most one invoice of each kind.
 
-Events store language-neutral codes and values, not rendered sentences, and are displayed in the viewer's language (§12.4).
+## 12.2 Closing
 
-## 10.3 What is logged
+Closing an invoice:
 
-- All create, update, archive, restore and delete operations on entries, clients, projects, categories, tags, assignments, rate rules, users and system settings
-- Rate-conflict detection and resolution
-- Sign-ins, failed sign-ins, sign-outs, credential changes, invites issued and consumed, session revocations
-- Super-admin procedure use
-- Timer start, stop, discard
-- API key creation and revocation, and every write made with a key
+1. Selects the entries in the chosen projects and period that are not yet in an invoice of that kind.
+2. Pins each at its current version, with its minutes, rate and value (the snapshot, §12.4).
+3. Marks them invoiced and locks them.
+4. Records an optional external invoice reference, who closed it, and when.
 
-## 10.4 Hard deletes
+Entries dated in the period but not yet synced to the hub, or logged afterwards, are **not** included. They stay uninvoiced and go on the next invoice.
 
-A hard delete writes a full snapshot of everything removed (for example, the client, its projects and every entry) into the audit log before the data is removed, so the history of what was destroyed survives.
+## 12.3 Lock effects
 
-## 10.5 Access
+- An invoiced entry (either kind) can't be edited or deleted, by anyone, including the owner.
+- A contributor invoice locks the member's entries.
+- A client invoice locks all included entries, including the owner's own, and the members' entries too, whether or not they had issued a contributor invoice.
+- If a client invoice is closed before a member has issued theirs, that member **can still issue a contributor invoice** for those entries. Their lock is independent.
+- New entries for a closed period are allowed. They are uninvoiced and appear on the next invoice of both kinds.
+- If the owner is also the author, only the client invoice applies.
 
-Admins can view and filter the whole log. A user can view the history of their own entries.
+## 12.4 Snapshot
 
-Retention and any personal-data handling for the log are open (see §15).
+At close, each pinned line stores the entry version, minutes, rate and value. After close:
+
+- reports for invoiced entries use the snapshot
+- a later rate change, including a back-dated rule, does not alter a closed invoice
+- an amendment to a pinned entry becomes an adjustment in the next open period
+
+## 12.5 Owner workflow
+
+When closing a client invoice, the dialog shows each member's status (for example "Doug: invoiced. Steffen: not yet") and their last sync time, because the hub cannot see changes still on offline devices. The owner may close anyway. An optional filter includes only entries that members have already invoiced.
+
+## 12.6 Reopening
+
+- A contributor invoice is reopened by its issuer, a client invoice by the owner or holder of `invoices.reopen`.
+- A reason is mandatory. It is recorded and visible to the other party.
+- A member **cannot** reopen a contributor invoice while a client invoice includes those entries. The owner must reopen theirs first.
+- Reopening unlocks the pinned entries; closing again produces a new snapshot.
+- There is no "accepted" state in the first milestone (§22).
+
+## 12.7 Ordering and offline
+
+The hub orders locks and edits by the time it **received** them, never by device timestamps. An edit made offline before a close, but received after, is **rejected**. The device shows the entry as invoiced with the reason, and keeps the rejected change as a visible draft so the person can ask the owner for a correction.
+
+## 12.8 Edge cases
+
+| Case | Rule |
+|---|---|
+| Edit or delete an invoiced entry | Rejected for everyone |
+| Split entry across a locked boundary | The locked piece is frozen. The other can be edited, but the midnight boundary cannot move |
+| Hard delete of a project or client with invoices | Blocked. Archive only |
+| What collaborators see | "Locked: invoiced" and, for client invoices, "billed to the client". The client invoice's reference is hidden from members |
+| Standalone | The same close action exists as a guard against yourself |
 
 ---
 
-# 11. Archive and Delete
+# 13. Sync and Collaboration
+
+This section states requirements for synchronization. The mechanism is open.
+
+## 13.1 What each party receives
+
+| Party | Receives |
+|---|---|
+| A person's other devices | Everything that person is entitled to |
+| A member | Their own entries and rates; the project's reference data (project, client name, enabled categories, shared tags, members' display names); their invoices and lock states |
+| An owner or holder of `entries.viewAll` | All entries on their projects, amendments, invoices, and (with `rates.viewAll`) rates |
+
+The hub filters per recipient. A device never receives data its person isn't entitled to.
+
+## 13.2 Guarantees
+
+- **Eventual convergence.** Participants end with the same data for everything they are entitled to, after reconnecting.
+- **Queued delivery.** The hub retains changes for disconnected participants and delivers them on reconnection.
+- **Idempotent.** Delivering or submitting the same change twice has the same effect as once.
+- **No silent loss.** A change that cannot be applied is surfaced to the person, never dropped.
+- **Offline use.** Every local operation works offline and is queued.
+
+## 13.3 One writer per record
+
+By construction, nearly all records have one author, so cross-person edit conflicts do not arise. Two cases remain.
+
+**The same person on two devices.** Edits are ordered by a logical clock rather than device time. The later edit to a field wins, the earlier value is kept in the history and visible. Neither is silently lost.
+
+**Authority across records.** A permission change, a lock, or a membership removal can conflict with an offline edit. The hub decides by the order it received them (§13.6).
+
+## 13.4 Deletions
+
+Deletion is recorded as a marker (a tombstone) that syncs like any change, so deleted records disappear everywhere and cannot reappear.
+
+## 13.5 Joining a hub
+
+A standalone user joins by signing in, linking the local identity, and choosing what to sync. Projects they own can be shared afterwards. They can disconnect and return to standalone, keeping their data.
+
+## 13.6 Hub validation
+
+The hub re-validates everything on arrival: authorship, membership and capabilities, project and category availability, locks, time rules, and the future-entry check against received time. A rejected change returns a reason, and the device shows it in a **needs-attention** list with the person's draft preserved.
+
+## 13.7 New and recovered devices
+
+A new or recovered device pulls everything its person is entitled to. A lost device is revoked (§13.8) and its person starts afresh from the hub. Unsynced changes on a lost device are gone.
+
+## 13.8 Revocation
+
+Revoking a device, removing a member, or disabling an account stops future sync. It cannot remove data already on a device (§4.5).
+
+## 13.9 Status
+
+The app shows: connected or offline, last synced, number of pending changes, and the needs-attention list.
+
+## 13.10 Protocol versions
+
+The sync protocol is versioned. A hub may refuse versions below a minimum and tell the app to update. A local database is migrated safely when the app updates (§16).
+
+---
+
+# 14. Screens
+
+## 14.1 Dashboard
+
+- A grid of cards for the user's active projects, including projects they own and those they are members of, with the owner shown for shared ones.
+- Card: project name, client name, description (truncated), a timer start control.
+- Keyboard and pointer accessible. Empty state offers to create a first project.
+
+## 14.2 Project time page
+
+1. **New entry form** (§8.6), with a mode switch for start/end, duration or timer.
+2. **Entries**, grouped by date, newest first, one table per date. The group header shows the date and day total in `hh:mm`.
+
+Only the last `entryWindow` days load by default, with a control for older entries. Viewers with `entries.viewAll` see all members' entries with a user column and filter.
+
+Columns: From, To, Duration (`hh:mm`, read-only), Category, Description, Tags, Billable, and Value where the viewer may see it. Rows show a lock for invoiced entries, a link for split pieces, and a marker for amendments. Empty state: "No time entries have been recorded for this project."
+
+## 14.3 Row-level editing
+
+- Activating a cell (click or double-click) makes the **whole row** editable, with focus in the chosen cell.
+- **Enter** saves, **Esc** cancels, with visible Save and Cancel.
+- The row is validated and saved as one change, producing one new version.
+- **Tab** moves between fields in the row. Leaving the row with unsaved changes asks to keep or discard.
+- Editing start or end recalculates duration, splits or merges across midnight, and updates totals.
+- Touch devices get an explicit Edit button.
+- A failed save keeps the row open with the edited values and lets the person retry or cancel.
+- Locked entries cannot enter edit mode and explain why.
+- Editable fields: date, start, end (or duration), category, description, tags, billable.
+
+## 14.4 Search
+
+- Searches **everything the user may see**, not just the window. In the first milestone this works offline.
+- Free text over descriptions, with filters for client, project, category, tag, billable flag, date range, invoice state and (where permitted) person.
+- Results show total time and, where permitted, total value for the filtered set.
+
+## 14.5 Project settings
+
+Members and their roles and capabilities, invitations, categories enabled, shared tags, rate tables (§10.6), rate conflicts, archive and delete.
+
+## 14.6 Invoices
+
+A list of contributor and client invoices with state, period, projects, totals and reference; the close dialog (§12.5); reopening with a reason.
+
+## 14.7 Amendments
+
+Owners can amend an entry from the project page, with a required reason. Amended entries show original and effective figures.
+
+## 14.8 Sync and account
+
+Hub connection (connect, sign in, disconnect), account details, devices with revoke, sync status and the needs-attention list.
+
+## 14.9 Navigation
+
+Persistent navigation: Dashboard, Projects, Search, Invoices, and Settings. A user menu with preferences, theme switch and, when connected, account and sync status. The current location is identifiable, and menus are keyboard accessible.
+
+---
+
+# 15. Archive and Delete
 
 | Item | Archive | Hard delete |
 |---|---|---|
-| Client | Yes (default). Hides it and its projects from active lists; history remains. | Admin only, danger zone: lists the number of projects and entries that will be destroyed and requires explicit confirmation. Removes projects and entries atomically. |
-| Project | Yes (default). | Same, for its entries. |
-| Category | Yes (never hidden from existing entries). | **Never** if any entry or rate rule references it. |
-| Tag | Yes. Archived tags are no longer suggested; existing entries keep them. | Never while in use. A personal tag may be deleted by its owner when unused; a core tag by an admin when unused. |
-| Entry | n/a | Owner or admin, with confirmation, unless locked (reserved). Audited with a snapshot. |
-| User | Disable | Only if the user has no entries and no audit references. |
+| Client | Yes (default). Hides it and its projects; history remains. | Owner only, danger zone, with counts and an explicit confirmation. Blocked if any invoice exists or other people's entries exist. |
+| Project | Yes (default). | Same. |
+| Category | Yes. Existing entries keep it. | Never while referenced by any entry or rate rule. |
+| Tag | Yes. Archived tags are no longer suggested. | Never while in use. A personal tag by its owner, or a shared tag by the project owner, when unused. |
+| Entry | n/a | By its author, with confirmation, unless locked. Recorded as a tombstone with a snapshot in the history. |
+| Member | Remove (stops future sync) | Not applicable |
+| Hub account | Disable | Only if it owns no data and has no references |
 
-Archived items can be restored by an admin. Deletes that touch several records are atomic.
+Archived items can be restored by the owner. Deletions touching several records are atomic. Hard delete is blocked when another person's entries would be destroyed; archive instead. Statutory retention of billing records may restrict deletion (§22).
 
 ---
 
-# 12. Preferences and Appearance
+# 16. Backup, Restore and Standalone Guarantees
 
-## 12.1 User preferences
+## 16.1 Standalone guarantees
 
-- Language (default English; see §12.4)
-- Timezone (IANA)
-- Date format (default `DD.MM.YYYY`; others available)
-- Clock format (default 24-hour; 12-hour available)
+- No network calls, no telemetry and no remote assets unless the person connects to a hub. Checking for updates, if offered, is opt-in.
+- No account or sign-in. Data is stored locally in a form that is easy to copy.
 
-Duration is always displayed `hh:mm`. All dates and times are shown in the viewing user's formats and timezone. Language and date format are independent settings: English text with German-style dates is the default combination.
+## 16.2 Backup and restore
 
-## 12.2 Theme
+Because standalone data exists nowhere else, the first milestone includes:
 
-Light and dark themes, a header switch, persisted per device, defaulting to the system preference. Visual styles use centralized theme tokens; no hard-coded colors.
+- A manual **backup** to a single file the person can store anywhere
+- A **restore** from a backup file, with confirmation
+- A reminder when no backup has been made for a set time
 
-## 12.3 Responsive and accessible
+On a hub, the operator is responsible for backups (§19.5).
 
-- Desktop first; usable on tablet and phone.
-- Keyboard navigation, visible focus, labelled inputs, accessible error messages, sufficient contrast, semantic table markup, accessible dialogs.
+## 16.3 Safe upgrades
+
+The local database is versioned. The app migrates it on update and keeps the previous copy until the migration succeeds. A failed migration never leaves unusable data.
+
+---
+
+# 17. Preferences, Language and Appearance
+
+## 17.1 Preferences
+
+- Language (default English)
+- Timezone (IANA), date format (default `DD.MM.YYYY`), clock format (default 24-hour)
+- Theme (light, dark, or system)
+- Entry window (default 60 days)
+
+Duration is always `hh:mm`. Dates and times are shown in the viewer's formats and timezone. Language and date format are independent.
+
+## 17.2 Language and translation
+
+- All code, comments, identifiers and developer documentation are in English.
+- Every piece of user-visible text lives in translation catalogs separate from code. No screen contains hard-coded text. Adding a language is adding a catalog.
+- A missing translation falls back to English. A raw key is never shown.
+- Messages with values or counts use parameters and plural rules. Sentences are not assembled from fragments.
+- The hub reports errors as stable codes plus parameters, which the app translates.
+- The change history stores codes and values and is displayed in the viewer's language.
+- User-entered data (names, descriptions) is not translated.
+- Layout tolerates longer text and uses direction-neutral styling so right-to-left languages can be added.
+
+## 17.3 Appearance
+
+Light and dark themes with a switch. Centralized theme tokens, no hard-coded colors.
+
+## 17.4 Accessible and responsive
+
+- Desktop first, usable on smaller screens.
+- Keyboard navigation, visible focus, labelled inputs, accessible errors, sufficient contrast, semantic tables, accessible dialogs.
 - Every pointer-only interaction has a keyboard alternative.
 
-## 12.4 Language and translation
-
-- All code, comments, identifiers and developer documentation are written in English.
-- Every piece of user-visible text lives in translation catalogs, separate from code. No screen contains hard-coded text.
-- Adding a language means adding a catalog. It requires no code change.
-- English is the default. The admin sets the default language for new users, and each user can choose their own.
-- A missing translation falls back to English. A raw translation key is never shown to a user.
-- Messages that contain values or counts use the translation system's parameters and plural rules. Sentences are never assembled by joining fragments, because word order and plural forms differ between languages.
-- The server reports errors and validation failures as stable codes plus parameters. The interface turns them into translated text. The future API (§17) uses the same codes.
-- The audit log stores codes and values, so each viewer reads it in their own language.
-- User-entered data (client, project, category and tag names, descriptions) is shown as entered and is not translated.
-- Layout tolerates longer text and uses direction-neutral styling, so that right-to-left languages can be added later without redesign.
-
 ---
 
-# 13. Calculations and Test Vectors
+# 18. Calculations and Test Vectors
 
-## 13.1 Rules
+## 18.1 Rules
 
 - Duration of an interval = whole minutes between `startAt` and `endAt` (real elapsed time).
-- Display: `hh:mm`, with hours not capped at 24 (for example `126:30`).
-- Daily total = sum of the minutes of that date's entries for the viewed user (or per user in the admin view).
+- Display `hh:mm`, hours not capped at 24 (for example `126:30`).
+- Daily total = sum of that date's minutes for the viewed person or the viewer's entitled set.
 - Totals are computed from minutes, never from displayed values.
-- Value follows §8.4.
+- Values follow §10.4. Totals in different currencies are never added.
 
-## 13.2 Examples
+## 18.2 Time examples
 
 | Case | Result |
 |---|---|
 | 09:15 to 12:45 | 210 min = **3:30** |
-| Day with 09:00–11:30, 11:45–13:00, 14:00–17:00 | 150 + 75 + 180 = 405 min = **6:45** |
-| Edit 09:00–11:00 to 09:00–11:15 | Duration 2:00 → **2:15**; day total increases by 0:15 |
-| 23:00 to 02:00, Europe/Berlin, starting 2026-11-02 | Two entries: 2026-11-02 23:00–24:00 (1:00) and 2026-11-03 00:00–02:00 (2:00); both share a group; combined **3:00** |
-| Edit the split span's end from 02:00 to 23:30 | Pieces merge into one entry on 2026-11-02, **0:30**; the group no longer exists |
-| 01:30 to 03:30 local time on 2026-03-29, Europe/Berlin (clocks jump 02:00 to 03:00) | Real elapsed **1:00** |
-| Duration entry 1:30 on 2026-11-02 | Entry with no start or end, **1:30** |
-| End before start (10:00 to 09:00) | Rejected |
-| Start equals end | Rejected |
-| Duration longer than 24 hours | Rejected |
-| End time in the future | Rejected |
-| Overlap with the user's own existing entry | Warning; save allowed |
-| Overlap with another user's entry | No warning |
+| 09:00–11:30, 11:45–13:00, 14:00–17:00 | 150 + 75 + 180 = 405 min = **6:45** |
+| Edit 09:00–11:00 to 09:00–11:15 | 2:00 → **2:15**; day total +0:15 |
+| 23:00 to 02:00, Europe/Berlin, from 2026-11-02 | Two entries: 11-02 23:00–24:00 (1:00) and 11-03 00:00–02:00 (2:00); one group; **3:00** |
+| Edit that span's end to 23:30 | Merges into one entry on 11-02, **0:30** |
+| 01:30 to 03:30 on 2026-03-29, Europe/Berlin (02:00 jumps to 03:00) | Real elapsed **1:00** |
+| Duration entry 1:30 | No start or end, **1:30** |
+| End before start, start equals end, over 24 hours, in the future | Rejected |
+| Overlap with own entry on any project | Warning; save allowed |
+| Overlap with another person's entry | No warning |
+
+## 18.3 Invoice and sync examples
+
+| Case | Result |
+|---|---|
+| Doug logs 2,550 minutes in October and closes a contributor invoice (rate €100) | **42:30**, 2,550 × 100 / 60 = **€4,250.00** |
+| Doug adds a 1:30 entry dated 30 Oct on 5 Nov | Uninvoiced. October invoice still **42:30 / €4,250.00**. Billed next time |
+| Baden adds a Doug rate of €110 effective 2026-10-01 after October closed | Closed invoice stays **€4,250.00**. The late entry later values at 90 × 110 / 60 = **€165.00** |
+| Baden closes a client invoice before Steffen has invoiced | Steffen's entries are locked from editing. He can still issue his contributor invoice. New entries are uninvoiced |
+| Doug edits an October entry offline on 2 Nov; Baden closes October on 3 Nov; Doug syncs on 4 Nov | Edit **rejected**, entry shows as invoiced, the draft is kept |
+| Doug tries to reopen his invoice while a client invoice includes it | **Refused** until Baden reopens his |
+| Baden amends Doug's 3:30 entry to 3:00 before closing | Client invoice uses **3:00**. Doug's entry and invoice stay **3:30** |
+| Entry 31 Oct 23:00 to 1 Nov 02:00 with October closed | Oct piece locked. Nov piece editable, but its start can't move |
+| Same person edits one field on two offline devices | Later logical edit wins; the other value stays in the history |
 
 ---
 
-# 14. Non-Functional Requirements
+# 19. Non-Functional Requirements
 
-## 14.1 Security
+## 19.1 Security
 
-- Authenticated access to all private data; authorization on the server for every operation.
-- Secure session handling, encrypted transport, protection against injection, cross-site scripting and request forgery.
-- No plain-text secrets. Passwords (admin only) only as salted, strong hashes with a second factor required.
+- Authenticated, authorized access to all synced data, enforced at the hub.
+- Secure device credentials in the operating system's secure storage.
+- Encrypted transport. Protection against injection and cross-site attacks on the hub's pages.
 - Rate limiting and lockout on repeated failed sign-ins.
-- Secrets and credentials kept out of source control.
+- No plain-text secrets. Secrets kept out of source control.
+- Hub exposure should be minimized, for example by running it behind a private network.
 
-## 14.2 Reliability and integrity
+## 19.2 Reliability and integrity
 
-- Referential integrity between all related records.
+- Referential integrity between related records.
 - Multi-record operations are atomic.
-- Failed saves never silently lose user input.
-- Optimistic concurrency on every update.
-- Server-side validation of every rule; the client is advisory only.
+- Failed saves and rejected changes never silently lose user input.
+- Idempotent sync (§13.2).
+- The hub validates every rule. The app's validation is advisory.
 
-## 14.3 Performance
+## 19.3 Performance
 
-- Interactive operations feel immediate.
-- The default view is bounded by the entry window; search and long histories must remain responsive.
+- Local operations are immediate, regardless of connectivity.
+- Default views are bounded by the entry window; search and long histories stay responsive.
 
-## 14.4 Maintainability
+## 19.4 Maintainability
 
-- Business rules (time, splitting, rates) live in one place and are shared by every code path.
+- Business rules (time, splitting, rates, invoice locking) exist in **one** implementation shared by the app and the hub.
 - Validation is centralized and reused by create and edit.
-- Table columns and form fields are declared in configuration, not in the order data happens to arrive.
-- The user interface and any future API are both clients of one application service layer. No business rule exists only in screen code (see §17.2).
-- All code and comments are in English (see §12.4).
+- Table columns and form fields are declared in configuration.
+- The interface and any future API use the same application service layer.
+- All code and comments are in English.
 
-## 14.5 Operations
+## 19.5 Operations (hub)
 
-- Backups with a tested restore procedure.
-- Monitoring and error reporting.
-- HTTPS everywhere.
-- A documented procedure for the super-admin command.
+- Backups with a tested restore, disk encryption, HTTPS, monitoring and error reporting.
+- A documented procedure for the operator command line.
+- Logs exclude descriptions and rates.
 
-## 14.6 Testing
+## 19.6 Testing
 
 Automated tests are required for:
 
-- Duration, daily total, `hh:mm` formatting and value calculation, using the vectors in §8.7 and §13.2
-- Midnight splitting, merging and editing of split groups, including daylight-saving days
+- Duration, totals, `hh:mm` and value calculation, using the vectors in §10.7 and §18
+- Midnight splitting, merging, editing, and daylight-saving days
 - Rate resolution, effective dates, specificity and conflict detection
-- Timezone handling, including a user changing timezone
-- All validation rules, on the server
-- Access control: user versus admin visibility, unassigned projects and categories, disabled users
-- Archive and delete rules, including blocked deletes and atomic cascades
-- Audit log completeness for each operation type
-- Authentication flows: invite, passkey, admin password with second factor, session revocation, break-glass invite
-- Timer: single timer, stop, stale-timer prompt, stop across midnight
-- Optimistic concurrency conflicts
-- Tags: core versus personal visibility, name matching, promotion and merge
-- Translation: every catalog key used by the interface exists in English, missing translations fall back, plurals and parameters render correctly
+- Timezone handling, including a changed preference
+- All validation rules, locally and at the hub
+- Capability enforcement at the hub: visibility, filtering, removal, revocation
+- Amendments never changing the author's data
+- Invoice closing, snapshots, locks, reopening, late entries and the cross-lock rule
+- Offline behavior: queueing, idempotent delivery, rejection of stale edits, ordering by hub receipt
+- Same-person multi-device edits
+- Tombstones, joining and leaving a hub, new and revoked devices
+- Backup, restore and database migration, including a failed migration
+- Authentication flows: invite, passkey, device pairing, revocation, operator recovery
+- Timer behavior, stale timers, and the two-device case
+- Translation: every key exists in English, fallbacks, plurals and parameters
 - Accessibility of keyboard flows, and both themes
+- Standalone makes no network calls
 
 ---
 
-# 15. Open Items
+# 20. Planned API (designed for now, built later)
 
-These remain undecided. Each has a working default that the specification above already assumes.
+## 20.1 Intent
+
+A developer who has built their own tool should be able to connect to a hub with an API key to read the reference data they are allowed to use and submit time against those projects.
+
+## 20.2 Constraints on the first milestone
+
+- One application service layer is used by the app, the hub's sync, and any future API.
+- Stable, opaque identifiers; machine-readable error codes; unambiguous types (instants with offsets, integer minutes, money in the smallest unit plus currency).
+- Versioned records; lists that are paginated and filterable.
+- Writes are idempotent. An `externalRef` repeated by the same person returns the existing entry.
+- Entries record `source` and optional `externalRef`.
+
+## 20.3 API keys
+
+- A key belongs to one account and **acts as that person**, with exactly their permissions.
+- Scopes: read-only, or read plus write of own time entries.
+- Shown once, stored only as a hash, with label, optional expiry, last-used time, and revocable at any time.
+- A key cannot manage accounts, devices, members, rates or invoices.
+- Writes made with a key are recorded in the history with the key.
+
+## 20.4 Intended first release
+
+Read: own profile, projects, clients, categories, tags, own entries. Write: create, update and delete own entries (subject to locks). Rates, invoices and the timer are not exposed at first.
+
+## 20.5 Contract
+
+Versioned, published as a machine-readable description with examples, with deprecations announced.
+
+---
+
+# 21. Later Phases
+
+## 21.1 Phase 3: independent hubs
+
+Multiple operators run hubs. A person belongs to one hub per account. Required design before this phase: hub discovery, how an installation connects to its hub, and how data moves if a hub moves name (§3.2).
+
+## 21.2 Phase 4: federation
+
+Trusted hubs exchange data (§6.4). Required design: hub identity and trust establishment, cross-hub user identity, discovery, transport security, event routing, permission enforcement across hubs, and what happens to queued changes when trust is revoked.
+
+## 21.3 Other future work
+
+- Reporting module: totals by client, project, category, person and period; billable summaries; exports
+- General data export and import
+- An "accepted" state for contributor invoices
+- Cost versus client billing rates
+- Project and task budgets
+- Expense tracking
+- Email notifications
+- Mobile apps and a web client
+- Windows and Linux builds
+- Field-level or end-to-end encryption
+- Additional sign-in methods
+- Additional interface languages
+- The public API (§20)
+
+---
+
+# 22. Open Items
+
+Each has a working default that the specification above already assumes.
 
 | # | Item | Working default |
 |---|---|---|
-| 1 | Google sign-in in v1 | Decide with the stack. Passkeys are the baseline either way. |
-| 2 | Second factor for admin password | TOTP required. |
-| 3 | Super-admin command | Depends on server shell access in the chosen hosting. |
-| 4 | Whether users see the value of their own entries | Yes. |
-| 5 | Client contact fields | Name only in v1. |
-| 6 | First additional interface language | None in version 1; English only, with the mechanism ready (§12.4). |
-| 7 | Default timezone for new users | Europe/Berlin, set by the admin at creation. |
-| 8 | Audit-log retention and personal data (users are individuals; entries and the log may hold names and IP addresses) | Keep indefinitely until a policy is set. |
-| 9 | Statutory retention of billing-related records in Germany | Confirm with an accountant. Hard delete is admin-only, and a "locked" hook (`lockedAt`) is reserved. |
-| 10 | Whether an unresolved rate conflict should block saving the entry | No: save, flag, alert the admin. |
-| 11 | Maximum look-back for back-dating | Unlimited in v1. |
-| 12 | Behaviour for a rule saved with an `effectiveFrom` earlier than existing entries | Entries are re-valued by date; any conflicts are flagged. |
-| 13 | Who may create API keys | Admin enables API access per user (default off); the user then manages their own keys. |
-| 14 | API key scopes | Two: read-only, and read plus write time entries. |
-| 15 | Duplicate protection when an API client resubmits an entry | The same `externalRef` from the same user returns the existing entry instead of creating a second one. |
+| 1 | Local app technology, platforms, shell, database and hub stack | Open; the next topic |
+| 2 | Sync mechanism and exact conflict algorithm | Open; requirements are in §13 |
+| 3 | Sign-in on the hub: browser passkeys or device-held keys | Browser passkeys |
+| 4 | Whether a password method is offered (v1 allowed it for admins) | No; passkeys only, recovery through the operator |
+| 5 | Google sign-in | Later, optional |
+| 6 | Categories: per owner with per-project enablement, or per project | Per owner, enabled per project |
+| 7 | Restricting which categories an individual member may use | Not in the first milestone |
+| 8 | Visibility of amendments to the author | Visible, read-only |
+| 9 | Whether project managers see rates | No, unless granted |
+| 10 | Currency per owner versus per project or client | Per owner |
+| 11 | Who may create hub accounts | Only the operator |
+| 12 | Whether ordinary users may create projects on a hub | Yes, subject to hub policy |
+| 13 | Accepted state for contributor invoices | Later |
+| 14 | Hard delete of a project that has other people's entries | Blocked; archive instead |
+| 15 | Audit and history retention and personal data (IP addresses, names) | Keep until a policy is set |
+| 16 | Statutory retention of billing records in Germany | Confirm with an accountant; hard delete is owner-only and blocked when invoices exist |
+| 17 | Maximum back-dating | Unlimited |
+| 18 | Whether a rate conflict blocks saving an entry | No: save, flag, alert |
+| 19 | Behavior of a rule saved with an earlier effective date than existing entries | Uninvoiced entries are re-valued by date; closed invoices are not; conflicts are flagged |
+| 20 | Windows and Linux timing | Later |
+| 21 | Open-source license and business model (paid tiers) | Open; does not block the first milestone |
+| 22 | Who may create API keys | The account holder, once API access exists |
+| 23 | Client contact fields | Name only |
+| 24 | Hub discovery and moving a hub to a new name | Phase 3 |
 
 ---
 
-# 16. Future Work (not in version 1)
+# 23. Changes from Concept v1 and Heritage
 
-- Reporting module: totals by client, project, category, user and period; billable summaries; CSV export
-- Data export and import; migration tools
-- Cost rates and client billing rates alongside the user rate
-- Period locking ("billed") on top of `lockedAt`
-- Project and task budgets
-- Invoicing
-- Expense tracking
-- Offline use and installable (PWA) or local-first apps
-- Email notifications and reminders
-- Additional sign-in providers
-- The public API (§17)
-- Additional interface languages
+## 23.1 Where v1 concepts went
 
----
-
-# 17. Planned API (designed for now, built later)
-
-## 17.1 Intent
-
-A developer who has built their own time-tracking tool should be able to connect it to TimeTrack with an API key: read the reference data they are allowed to use (clients, projects, categories, tags) and submit time against those clients and projects.
-
-The API is not part of version 1 delivery. Version 1 must not make it hard to add.
-
-## 17.2 Design constraints on version 1
-
-- **One service layer.** Every operation the interface performs (list projects, create an entry, edit an entry, and so on) is an application operation that carries its own validation, authorization and audit. The interface and the future API are both clients of it. Midnight splitting, overlap warnings, rate handling and access control are therefore identical for both.
-- **Stable identifiers.** Records have opaque identifiers that never change and are never reused.
-- **Machine-readable errors.** Failures carry stable codes and parameters (§12.4).
-- **Unambiguous data types.** Timestamps are absolute instants with an explicit offset. Durations are integer minutes. Money is an integer in the smallest currency unit plus a currency code.
-- **Concurrency.** The entry `version` is part of the contract so a client can detect a conflicting change.
-- **Lists** are paginated and filterable by date range, project and similar fields.
-- **Provenance.** Entries record their `source` and may carry an `externalRef`, an identifier from the external tool (§5.7).
-- **Audit.** Writes made through a key are attributed to the user and to the key (§10).
-
-## 17.3 API keys
-
-- A key belongs to one user and **acts as that user**. It sees exactly what that user sees, is bound by the same project and category assignments, and goes through the same validation and splitting. It can never do more than the user.
-- A key has one of two scopes: read-only, or read plus write of time entries.
-- The full key is shown once, at creation. Only a one-way hash is stored.
-- A key has a label, an optional expiry date and a last-used timestamp. The owner or an admin can revoke it at any time. Disabling the user revokes their keys.
-- API access is switched on per user by the admin (default off). The user then manages their own keys.
-- Keys cannot manage users, credentials, assignments, rates or settings.
-- Requests are rate limited. Key creation, revocation and every write are audited. Individual reads are not.
-- Keys are separate from browser sessions and passkeys.
-
-## 17.4 Intended capabilities (first release of the API)
-
-| Area | Operations |
+| Concept v1 | Concept v2 |
 |---|---|
-| Current user | Read own profile and preferences |
-| Clients, projects, categories | List and read those the user may use |
-| Tags | List core tags and the user's own personal tags |
-| Time entries | List own entries (filter by date, project, category, tag); create, update and delete own entries using start and end, or duration |
+| Central server; online only | Local-first app; hub optional |
+| Admin creates users and sees all | Hub operator creates accounts; project owners see their projects |
+| Admin owns clients and projects | Project owner |
+| Admin assigns projects and categories per user | Project membership and capabilities; categories enabled per project |
+| Admin sets rates; client charges not tracked | Project owner sets each member's rates |
+| Admin edits any entry | No one rewrites another's entry; owner amends |
+| Server-owned timer | Device timer, reconciled at sync |
+| Super-admin command line for admin accounts | Hub operator command line |
+| Admin password and TOTP | Open (§22 #4) |
+| API keys per user | Same, via a hub |
+| Reserved `lockedAt` | Contributor and client invoices (§12) |
+| Server-side audit log | Append-only history on every record, plus the hub's log |
+| Core and personal tags | Shared (owner-managed) and personal tags |
 
-Creating an entry with an `externalRef` that the user has already used returns the existing entry, so a client can safely retry. Rates and values are not exposed in the first release. The live timer is not exposed in the first release.
+## 23.2 What carried over unchanged
 
-## 17.5 Contract and compatibility
+The three ways to record time, whole-minute precision and `hh:mm`, timezone capture, midnight splitting, validation rules, overlap warnings, the rate-resolution and conflict model, immutable effective-dated rates, row-level editing, translation, tags, archive-over-delete, and the design philosophy.
 
-- The API is versioned. A breaking change is a new version.
-- The contract is published as a machine-readable description with examples.
-- Deprecated versions are announced before they are removed.
+## 23.3 Heritage
 
----
-
-# 18. Heritage
-
-A prototype was built in April–May 2024 as a single-user application, with a database, an HTTP API and a browser interface. It was never deployed and holds no data worth migrating. Its repository will be reviewed after the technology discussion. The detailed reconstruction of that prototype is kept in [docs/brief-v1.md](docs/brief-v1.md).
+A prototype was built in April–May 2024 as a single-user application, with a database, an HTTP API and a browser interface. It was never deployed and holds no data worth migrating. Its repository will be reviewed during the technology discussion. Its reconstruction is kept in [docs/brief-v1.md](docs/brief-v1.md).
