@@ -7,7 +7,7 @@ use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use timetrack_core::id::Id;
 use timetrack_core::model::{
-    normalize_tags, require_description, TimeEntry, Timer, KIND_ENTRY, KIND_TIMER,
+    compose_description, normalize_tags, TimeEntry, Timer, KIND_ENTRY, KIND_TIMER,
 };
 use timetrack_core::record::Record;
 use timetrack_core::time::{local_date, local_to_utc, TimeError};
@@ -31,7 +31,9 @@ pub struct StartTimer {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct StopTimer {
-    /// Required: the description is confirmed when the timer stops.
+    /// The last piece of the description, typed at the stop. Together with the
+    /// notes added while the timer ran it must give at least one line.
+    #[serde(default)]
     pub description: String,
     /// The real stop time as `HH:MM` on the start's date (next day if it is
     /// not later than the start). Without it the timer stops now.
@@ -48,6 +50,9 @@ pub struct TimerState {
     /// Started on an earlier day: the person is asked for the real stop time
     /// or to discard it (the only notification in the first milestone).
     pub stale: bool,
+    /// The category last used on the timer's project, proposed at the stop
+    /// when the timer itself has none.
+    pub suggested_category_id: Option<Id>,
 }
 
 fn to_minute(t: DateTime<Utc>) -> DateTime<Utc> {
@@ -72,7 +77,18 @@ impl<S: Store> App<S> {
             }
             None => false,
         };
-        Ok(TimerState { timer, stale })
+        let suggested_category_id = match &timer {
+            Some(rec) => {
+                let t: Timer = payload(rec)?;
+                self.last_used_category(&t.project_id)?
+            }
+            None => None,
+        };
+        Ok(TimerState {
+            timer,
+            stale,
+            suggested_category_id,
+        })
     }
 
     pub fn start_timer(&mut self, new: StartTimer) -> Result<Record> {
@@ -84,6 +100,7 @@ impl<S: Store> App<S> {
             project_id: new.project_id,
             category_id: new.category_id,
             description: new.description.trim().to_owned(),
+            notes: vec![],
             billable: new.billable,
             tags: normalize_tags(&new.tags)?,
             start_at: to_minute(self.now()),
@@ -103,9 +120,10 @@ impl<S: Store> App<S> {
             .max_by(|a, b| a.id.cmp(&b.id))
             .ok_or(AppError::NothingToRepeat)?;
         let e: TimeEntry = payload(&newest)?;
+        let category_id = self.last_used_category(&e.project_id)?;
         self.start_timer(StartTimer {
             project_id: e.project_id,
-            category_id: e.category_id,
+            category_id,
             description: String::new(),
             tags: vec![],
             billable: Some(e.billable),
@@ -129,10 +147,37 @@ impl<S: Store> App<S> {
         self.revise(&rec, &t)
     }
 
+    /// Adds a line while the timer runs (a bullet point of the entry later).
+    pub fn add_timer_note(&mut self, text: &str) -> Result<Record> {
+        let rec = self.current_timer()?.ok_or(AppError::NoTimer)?;
+        let mut t: Timer = payload(&rec)?;
+        let note = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        if note.is_empty() {
+            return Err(timetrack_core::model::ModelError::DescriptionRequired.into());
+        }
+        t.notes.push(note);
+        // What was typed in the note field has been entered as a note.
+        t.description.clear();
+        self.revise(&rec, &t)
+    }
+
+    /// Removes a running note by its position.
+    pub fn remove_timer_note(&mut self, index: usize) -> Result<Record> {
+        let rec = self.current_timer()?.ok_or(AppError::NoTimer)?;
+        let mut t: Timer = payload(&rec)?;
+        if index >= t.notes.len() {
+            return Err(AppError::NotFound);
+        }
+        t.notes.remove(index);
+        self.revise(&rec, &t)
+    }
+
     pub fn stop_timer(&mut self, stop: StopTimer) -> Result<SavedEntry> {
         let rec = self.current_timer()?.ok_or(AppError::NoTimer)?;
         let t: Timer = payload(&rec)?;
-        let description = require_description(&stop.description)?;
+        let mut pieces_of_text = t.notes.clone();
+        pieces_of_text.push(stop.description.clone());
+        let description = compose_description(&pieces_of_text)?;
         let zone: Tz = t.timezone.parse().map_err(|_| AppError::UnknownTimeZone)?;
         let category_id = stop.category_id.clone().unwrap_or(t.category_id.clone());
         let project = self.check_refs(&t.project_id, category_id.as_ref())?;

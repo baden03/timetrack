@@ -32,7 +32,7 @@ fn setup(start: &str) -> Setup {
         clock(&now),
     )
     .unwrap();
-    let client = app.create_client("Acme").unwrap();
+    let client = app.create_client("Acme", None).unwrap();
     let category = app.create_category("Development").unwrap();
     let project = app
         .create_project(ProjectInput {
@@ -41,6 +41,7 @@ fn setup(start: &str) -> Setup {
             description: String::new(),
             billable_default: true,
             category_ids: vec![category.id.clone()],
+            color: None,
         })
         .unwrap();
     Setup {
@@ -136,7 +137,7 @@ fn timer_survives_a_restart() {
             clock(&now),
         )
         .unwrap();
-        let client = app.create_client("Acme").unwrap();
+        let client = app.create_client("Acme", None).unwrap();
         let category = app.create_category("Dev").unwrap();
         let project = app
             .create_project(ProjectInput {
@@ -145,6 +146,7 @@ fn timer_survives_a_restart() {
                 description: String::new(),
                 billable_default: true,
                 category_ids: vec![category.id.clone()],
+                color: None,
             })
             .unwrap();
         app.start_timer(StartTimer {
@@ -320,6 +322,7 @@ fn dashboard_orders_projects_by_recent_use_and_overview_totals() {
             description: String::new(),
             billable_default: true,
             category_ids: vec![],
+            color: None,
         })
         .unwrap();
     let names = |s: &Setup| -> Vec<String> {
@@ -387,4 +390,179 @@ fn the_display_start_is_exact_while_the_entry_start_is_to_the_minute() {
     old.as_object_mut().unwrap().remove("exact_start_at");
     let parsed: timetrack_core::model::Timer = serde_json::from_value(old).unwrap();
     assert!(parsed.exact_start_at.is_none());
+}
+
+#[test]
+fn running_notes_become_bullet_points_of_the_entry() {
+    let mut s = setup("2026-11-03T09:00:00Z");
+    start(&mut s);
+    s.app.add_timer_note("  Setup folder   structure ").unwrap();
+    s.app.add_timer_note("Add placeholder files").unwrap();
+    assert_eq!(
+        s.app.add_timer_note("   ").unwrap_err().code(),
+        "description_required"
+    );
+    advance(&s, "2026-11-03T10:00:00Z");
+
+    // The text typed at the stop is the last bullet.
+    let saved = s
+        .app
+        .stop_timer(stop("Update placeholder text with the client's text", None))
+        .unwrap();
+    assert_eq!(
+        saved.pieces[0].payload["description"],
+        "- Setup folder structure\n- Add placeholder files\n- Update placeholder text with the client's text"
+    );
+    assert!(s.app.timer_state().unwrap().timer.is_none());
+}
+
+#[test]
+fn notes_alone_are_enough_and_one_piece_stays_plain() {
+    let mut s = setup("2026-11-03T09:00:00Z");
+    start(&mut s);
+    s.app.add_timer_note("Only note").unwrap();
+    advance(&s, "2026-11-03T09:30:00Z");
+    // Nothing typed at the stop: the note alone is the description, without a bullet.
+    let saved = s.app.stop_timer(stop("", None)).unwrap();
+    assert_eq!(saved.pieces[0].payload["description"], "Only note");
+
+    // With no notes and no text, the stop is refused and the timer stays.
+    start(&mut s);
+    advance(&s, "2026-11-03T10:00:00Z");
+    assert_eq!(
+        s.app.stop_timer(stop("  ", None)).unwrap_err().code(),
+        "description_required"
+    );
+    assert!(s.app.timer_state().unwrap().timer.is_some());
+}
+
+#[test]
+fn a_note_can_be_removed_and_survives_a_restart() {
+    let dir = std::env::temp_dir().join(format!("tt-notes-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("db.sqlite");
+    let now: Now = Arc::new(Mutex::new(at("2026-11-03T09:00:00Z")));
+    let project = {
+        let mut app = App::open(
+            SqliteStore::open(&path).unwrap(),
+            "Europe/Berlin",
+            clock(&now),
+        )
+        .unwrap();
+        let client = app.create_client("Acme", None).unwrap();
+        let project = app
+            .create_project(ProjectInput {
+                client_id: client.id,
+                name: "Site".into(),
+                description: String::new(),
+                billable_default: true,
+                category_ids: vec![],
+                color: None,
+            })
+            .unwrap();
+        app.start_timer(StartTimer {
+            project_id: project.id.clone(),
+            category_id: None,
+            description: String::new(),
+            tags: vec![],
+            billable: None,
+        })
+        .unwrap();
+        app.add_timer_note("one").unwrap();
+        app.add_timer_note("two").unwrap();
+        app.add_timer_note("three").unwrap();
+        app.remove_timer_note(1).unwrap();
+        assert_eq!(app.remove_timer_note(7).unwrap_err().code(), "not_found");
+        project.id
+    }; // dropped without stopping
+    let _ = project;
+    let app = App::open(
+        SqliteStore::open(&path).unwrap(),
+        "Europe/Berlin",
+        clock(&now),
+    )
+    .unwrap();
+    let state = app.timer_state().unwrap();
+    assert_eq!(
+        state.timer.unwrap().payload["notes"],
+        serde_json::json!(["one", "three"])
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn the_last_used_category_is_proposed_and_kept_for_quick_start() {
+    let mut s = setup("2026-11-03T09:00:00Z");
+    let other = s.app.create_category("Meetings").unwrap();
+    let client = s.app.list("client", false).unwrap().remove(0);
+    let project = s
+        .app
+        .create_project(ProjectInput {
+            client_id: client.id,
+            name: "Both".into(),
+            description: String::new(),
+            billable_default: true,
+            category_ids: vec![s.category.clone(), other.id.clone()],
+            color: None,
+        })
+        .unwrap();
+    advance(&s, "2026-11-03T12:00:00Z");
+    let entry = |s: &mut Setup, cat: Option<Id>, start: &str, end: &str| {
+        s.app
+            .create_entry(timetrack_app::NewEntry {
+                project_id: project.id.clone(),
+                category_id: cat,
+                description: "x".into(),
+                billable: None,
+                tags: vec![],
+                timing: timetrack_app::Timing::Interval {
+                    date: "2026-11-03".into(),
+                    start: start.into(),
+                    end: end.into(),
+                },
+                timezone: None,
+            })
+            .unwrap();
+    };
+    // Nothing recorded yet: no proposal.
+    assert_eq!(
+        s.app
+            .suggest(&project.id, "2026-11-03")
+            .unwrap()
+            .category_id,
+        None
+    );
+    let dev = s.category.clone();
+    entry(&mut s, Some(dev.clone()), "09:00", "10:00");
+    advance(&s, "2026-11-03T12:10:00Z");
+    entry(&mut s, Some(other.id.clone()), "10:00", "11:00");
+    advance(&s, "2026-11-03T12:20:00Z");
+    // A later entry without a category does not erase the proposal.
+    entry(&mut s, None, "11:00", "12:00");
+    assert_eq!(
+        s.app
+            .suggest(&project.id, "2026-11-03")
+            .unwrap()
+            .category_id,
+        Some(other.id.clone())
+    );
+
+    // Quick start takes the newest entry's project and that project's last used category.
+    let rec = s.app.quick_start_timer().unwrap();
+    assert_eq!(rec.payload["category_id"], other.id.to_string());
+    let state = s.app.timer_state().unwrap();
+    assert_eq!(state.suggested_category_id, Some(other.id.clone()));
+    s.app.discard_timer().unwrap();
+
+    // An archived category is skipped; the next older one is proposed instead.
+    s.app
+        .set_category_status(&other.id, timetrack_core::model::Status::Archived)
+        .unwrap();
+    assert_eq!(
+        s.app
+            .suggest(&project.id, "2026-11-03")
+            .unwrap()
+            .category_id,
+        Some(dev)
+    );
 }

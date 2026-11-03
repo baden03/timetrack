@@ -4,7 +4,10 @@ import type { Data } from "../App";
 import { ErrorLine, errorText } from "./Errors";
 import { t, tError } from "../i18n";
 import { HistoryPanel } from "./HistoryPanel";
+import { colorOf } from "../colors";
 import { useDialogs } from "./Dialogs";
+import { ColorDot } from "./Color";
+import { DescriptionText } from "./DescriptionText";
 import { DateInput, TimeInput } from "./FormatInputs";
 import {
   addDays,
@@ -24,11 +27,14 @@ export function EntryList({
   entries,
   view,
   onChanged,
+  hideProject = false,
 }: {
   data: Data;
   entries: Rec<TimeEntry>[];
   view: "day" | "week";
   onChanged: () => Promise<void>;
+  /** On a project's own page every entry is for that project. */
+  hideProject?: boolean;
 }) {
   const settings = data.state.settings.payload;
   const [editing, setEditing] = useState<string | null>(null); // record id of the row being edited
@@ -92,7 +98,7 @@ export function EntryList({
                   <th scope="col">{t("ui.entries.from")}</th>
                   <th scope="col">{t("ui.entries.to")}</th>
                   <th scope="col">{t("ui.entries.duration")}</th>
-                  <th scope="col">{t("ui.entries.project")}</th>
+                  {!hideProject && <th scope="col">{t("ui.entries.project")}</th>}
                   <th scope="col">{t("ui.entries.category")}</th>
                   <th scope="col">{t("ui.entries.description")}</th>
                   <th scope="col">{t("ui.entries.tags")}</th>
@@ -109,6 +115,7 @@ export function EntryList({
                         key={rec.id}
                         data={data}
                         rec={rec}
+                        columns={hideProject ? 8 : 9}
                         onDone={async (changed) => {
                           setEditing(null);
                           if (changed) await onChanged();
@@ -123,6 +130,7 @@ export function EntryList({
                         key={rec.id}
                         data={data}
                         rec={rec}
+                        hideProject={hideProject}
                         onEdit={() => setEditing(rec.id)}
                         onDelete={() => remove(rec)}
                         historyOpen={historyOf === rec.id}
@@ -145,6 +153,7 @@ function names(data: Data, e: TimeEntry) {
   const client = data.clients.find((c) => c.id === project?.payload.client_id);
   const category = data.categories.find((c) => c.id === e.category_id);
   return {
+    color: colorOf(project?.payload, client?.payload),
     project: `${client?.payload.name ?? ""} / ${project?.payload.name ?? ""}`,
     category: category?.payload.name ?? t("ui.entries.no_category"),
   };
@@ -153,6 +162,7 @@ function names(data: Data, e: TimeEntry) {
 function ViewRow({
   data,
   rec,
+  hideProject,
   onEdit,
   onDelete,
   historyOpen,
@@ -160,6 +170,7 @@ function ViewRow({
 }: {
   data: Data;
   rec: Rec<TimeEntry>;
+  hideProject: boolean;
   onEdit: () => void;
   onDelete: () => void;
   historyOpen: boolean;
@@ -184,11 +195,16 @@ function ViewRow({
       <td>{e.start_at ? displayTime(e.start_at, e.timezone, s.clock_24h) : "–"}</td>
       <td>{e.end_at ? (endsAtMidnight ? "24:00" : displayTime(e.end_at, e.timezone, s.clock_24h)) : "–"}</td>
       <td>{formatHhmm(e.minutes)}</td>
-      <td>{n.project}</td>
+      {!hideProject && (
+        <td>
+          <ColorDot color={n.color} />
+          {n.project}
+        </td>
+      )}
       <td>{n.category}</td>
       <td>
         {e.piece_count > 1 && <span title={t("ui.entries.split_link")}>↔ </span>}
-        {e.description}
+        <DescriptionText text={e.description} />
       </td>
       <td>{e.tags.join(", ")}</td>
       <td>{e.billable ? t("ui.yes") : t("ui.no")}</td>
@@ -206,7 +222,7 @@ function ViewRow({
     </tr>
     {historyOpen && (
       <tr>
-        <td colSpan={9}>
+        <td colSpan={hideProject ? 8 : 9}>
           <HistoryPanel data={data} id={rec.id} />
         </td>
       </tr>
@@ -218,10 +234,12 @@ function ViewRow({
 function EditRow({
   data,
   rec,
+  columns,
   onDone,
 }: {
   data: Data;
   rec: Rec<TimeEntry>;
+  columns: number;
   onDone: (changed: boolean) => Promise<void>;
 }) {
   const e = rec.payload;
@@ -290,7 +308,7 @@ function EditRow({
 
   return (
     <tr className="editing" onKeyDown={keys}>
-      <td colSpan={9}>
+      <td colSpan={columns}>
         <ErrorLine message={error} />
         <div className="row">
           <label>
@@ -327,7 +345,11 @@ function EditRow({
           </label>
           <label className="grow">
             {t("ui.entries.description")}
-            <input value={description} onChange={(x) => setDescription(x.target.value)} />
+            <textarea
+              rows={Math.min(6, Math.max(1, description.split("\n").length))}
+              value={description}
+              onChange={(x) => setDescription(x.target.value)}
+            />
           </label>
           <label>
             {t("ui.entries.tags")}

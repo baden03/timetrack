@@ -138,3 +138,26 @@ dl.facts > div { background: var(--surface); border: 1px solid var(--border-stro
 dl.facts dt { color: var(--muted); font-size: .8rem; }
 dl.facts dd { margin: 0; }
 a { color: var(--accent); }
+
+/* Colors of clients and projects */
+.dot-color { display: inline-block; width: .7em; height: .7em; border-radius: 50%; margin-inline-end: .4em; vertical-align: baseline; }
+.project-card.colored { border-inline-start: 6px solid var(--card-color); background: color-mix(in srgb, var(--card-color) 9%, var(--surface)); }
+.project-card.colored.running { border-color: var(--card-color); box-shadow: 0 0 0 1px var(--card-color); border-inline-start-width: 6px; }
+fieldset.colors { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; padding: .4rem .6rem; }
+fieldset.colors legend { font-size: .8rem; color: var(--muted); }
+.swatch { position: relative; display: inline-flex; flex-direction: row; align-items: center; gap: .3rem; cursor: pointer; }
+.swatch input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.swatch .chip { width: 1.4rem; height: 1.4rem; border-radius: 50%; border: 2px solid transparent; }
+.swatch input:checked + .chip { border-color: var(--text); box-shadow: 0 0 0 2px var(--surface) inset; }
+.swatch input:focus-visible + .chip, .swatch.none input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
+.swatch.none span { padding: .1rem .5rem; border: 1px solid var(--border-strong); border-radius: 999px; font-size: .8rem; color: var(--text); }
+.swatch.none input:checked + span { border-color: var(--text); font-weight: 600; }
+ul.plain li { flex-wrap: wrap; }
+ul.plain li fieldset.colors { flex-basis: 100%; }
+
+/* Running notes and bullet descriptions */
+ul.notes, ul.bullets { margin: .2rem 0 0; padding-inline-start: 1.2rem; }
+ul.notes { flex-basis: 100%; }
+ul.notes li { display: flex; align-items: baseline; gap: .5rem; }
+ul.notes li button.link { margin: 0; padding: 0 .2rem; }
+ul.bullets { margin: 0; }

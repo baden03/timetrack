@@ -44,7 +44,14 @@ impl<S: Store> App<S> {
                 opt(args, "include_archived")?.unwrap_or(false),
             )?),
 
-            "create_client" => out(self.create_client(&arg::<String>(args, "name")?)?),
+            "create_client" => out(self.create_client(
+                &arg::<String>(args, "name")?,
+                opt::<String>(args, "color")?.as_deref(),
+            )?),
+            "set_client_color" => out(self.set_client_color(
+                &arg::<Id>(args, "id")?,
+                opt::<String>(args, "color")?.as_deref(),
+            )?),
             "rename_client" => {
                 out(self.rename_client(&arg::<Id>(args, "id")?, &arg::<String>(args, "name")?)?)
             }
@@ -97,6 +104,8 @@ impl<S: Store> App<S> {
                 out(self.update_timer(opt(args, "description")?, opt(args, "tags")?)?)
             }
             "stop_timer" => out(self.stop_timer(arg::<StopTimer>(args, "stop")?)?),
+            "add_timer_note" => out(self.add_timer_note(&arg::<String>(args, "text")?)?),
+            "remove_timer_note" => out(self.remove_timer_note(arg::<usize>(args, "index")?)?),
             "discard_timer" => out(self.discard_timer()?),
             "search_entries" => out(self.search_entries(&arg::<SearchQuery>(args, "query")?)?),
             "dashboard" => out(self.dashboard()?),

@@ -3,6 +3,7 @@ import { call, type ProjectCard, type TimerState } from "../api";
 import type { Data } from "../App";
 import { ErrorLine, errorText } from "../components/Errors";
 import { t } from "../i18n";
+import { colorOf, themedColor, useDark } from "../colors";
 import { displayDate } from "../time";
 
 /** Project cards, most recently used first (concept §14.1). */
@@ -17,6 +18,7 @@ export function DashboardPage({
   onOpen: (projectId: string) => void;
   onChanged: () => void;
 }) {
+  const dark = useDark();
   const [cards, setCards] = useState<ProjectCard[]>([]);
   const [timerRunning, setTimerRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +57,13 @@ export function DashboardPage({
         <ul className="cards">
           {cards.map((card) => (
             <li key={card.project.id}>
-              <article className={`project-card${card.running ? " running" : ""}`}>
+              <article
+                className={`project-card${card.running ? " running" : ""}${colorOf(card.project.payload, { color: card.client_color }) ? " colored" : ""}`}
+                style={(() => {
+                  const c = colorOf(card.project.payload, { color: card.client_color });
+                  return c ? ({ "--card-color": themedColor(c, dark) } as React.CSSProperties) : undefined;
+                })()}
+              >
                 <button className="card-link" onClick={() => onOpen(card.project.id)}>
                   <span className="client">{card.client_name}</span>
                   <span className="project">{card.project.payload.name}</span>

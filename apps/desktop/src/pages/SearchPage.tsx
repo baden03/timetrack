@@ -3,6 +3,8 @@ import { call, type SearchQuery, type SearchResult } from "../api";
 import type { Data } from "../App";
 import { ErrorLine, errorText } from "../components/Errors";
 import { t, tError } from "../i18n";
+import { colorOf } from "../colors";
+import { ColorDot } from "../components/Color";
 import { DateInput } from "../components/FormatInputs";
 import { displayDate, displayTime, formatHhmm, parseDate } from "../time";
 
@@ -138,6 +140,12 @@ export function SearchPage({ data }: { data: Data }) {
                       <td>{e.start_at ? displayTime(e.start_at, e.timezone, s.clock_24h) : "–"}</td>
                       <td>{formatHhmm(e.minutes)}</td>
                       <td>
+                        <ColorDot
+                          color={colorOf(
+                            project?.payload,
+                            data.clients.find((c) => c.id === project?.payload.client_id)?.payload,
+                          )}
+                        />
                         {name(data.clients, project?.payload.client_id ?? "")} / {project?.payload.name}
                       </td>
                       <td>{name(data.categories, e.category_id ?? "")}</td>

@@ -5,6 +5,7 @@ use serde::Serialize;
 
 use crate::i18n::Catalog;
 use crate::id::Id;
+use crate::model::description_items;
 use crate::time::format_hhmm;
 
 /// One stored piece, already limited to the month and to billable entries.
@@ -54,11 +55,6 @@ pub struct Summary {
 
 fn by_name(a: &str, b: &str) -> std::cmp::Ordering {
     a.to_lowercase().cmp(&b.to_lowercase()).then(a.cmp(b))
-}
-
-/// Line breaks and runs of spaces become single spaces.
-fn one_line(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 type ProjectAcc = (Id, ProjectBlock, Vec<(Option<Id>, CategoryBlock)>);
@@ -117,7 +113,10 @@ pub fn build(entries: &[SummaryEntry]) -> Summary {
         };
         let category = &mut categories[ki].1;
         category.minutes += e.minutes;
-        category.descriptions.push(one_line(&e.description));
+        // A bullet list is several lines of the summary; other text is one.
+        category
+            .descriptions
+            .extend(description_items(&e.description));
     }
 
     let mut total = 0;
@@ -295,6 +294,26 @@ Grand total: 49:30
         assert!(zebra < loose);
         assert!(text.contains("    - Loose work\n"));
         assert!(text.contains("Website relaunch — 1:30"));
+    }
+
+    #[test]
+    fn a_bullet_description_is_one_summary_line_per_bullet() {
+        let ids = ids();
+        let entries = vec![
+            entry(
+                &ids,
+                0,
+                0,
+                0,
+                "- Setup folder structure\n- Add placeholder files\n- Update placeholder text",
+                90,
+            ),
+            entry(&ids, 0, 0, 0, "Single line", 30),
+        ];
+        let text = build(&entries).to_text(&Catalog::english(), 2026, 11);
+        assert!(text.contains(
+            "  Development — 2:00\n    - Setup folder structure\n    - Add placeholder files\n    - Update placeholder text\n    - Single line\n"
+        ), "{text}");
     }
 
     #[test]

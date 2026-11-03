@@ -32,6 +32,8 @@ Grand total: 59:45
 - **Grouping:** client, then project, then category. Names are sorted alphabetically, ignoring case. Items are grouped by identity, so two clients with the same name stay separate.
 - **Totals:** `hh:mm` at every level, computed from minutes. The category totals add up to the project total, the project totals to the client total, and the client totals to the grand total.
 - **Descriptions:** one line per entry, exactly as typed, in date and time order within a category. No dates. Repeated descriptions are not merged. Line breaks inside a description become single spaces.
+- **Bullet descriptions:** an entry whose description is a bullet list (two or more lines, each starting with `- `, as made by the notes typed while a timer runs) gives one summary line per bullet, at the same level as other descriptions.
+- **No category:** time without a category is listed last under a translated "Uncategorized" label.
 - **Billable only:** non-billable entries are left out of the summary and its totals.
 - **Month assignment:** each stored piece counts in the month of its own local date. An entry that crosses midnight at a month end contributes to both months.
 - **Empty month:** the text says that no billable time was recorded.

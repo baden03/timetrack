@@ -26,13 +26,14 @@ fn open(path: &std::path::Path, now: &str) -> App<SqliteStore> {
 }
 
 fn add_project(app: &mut App<SqliteStore>, name: &str) {
-    let client = app.create_client(&format!("{name} client")).unwrap();
+    let client = app.create_client(&format!("{name} client"), None).unwrap();
     app.create_project(ProjectInput {
         client_id: client.id,
         name: name.into(),
         description: String::new(),
         billable_default: true,
         category_ids: vec![],
+        color: None,
     })
     .unwrap();
 }

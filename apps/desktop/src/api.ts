@@ -13,11 +13,12 @@ export interface Rec<T> {
   payload: T;
 }
 
-export interface Client { name: string; status: Status }
+export interface Client { name: string; color?: string | null; status: Status }
 export interface Category { name: string; status: Status }
 export interface Project {
   client_id: Id;
   name: string;
+  color?: string | null;
   description: string;
   billable_default: boolean;
   category_ids: Id[];
@@ -85,6 +86,8 @@ export interface Timer {
   project_id: Id;
   category_id: Id | null;
   description: string;
+  /** Lines added while the timer runs; bullet points of the entry later. */
+  notes: string[];
   billable: boolean | null;
   tags: string[];
   /** The start to the minute (what the entry will use). */
@@ -93,7 +96,12 @@ export interface Timer {
   exact_start_at?: string | null;
   timezone: string;
 }
-export interface TimerState { timer: Rec<Timer> | null; stale: boolean }
+export interface TimerState {
+  timer: Rec<Timer> | null;
+  stale: boolean;
+  /** Category last used on the timer's project. */
+  suggested_category_id: Id | null;
+}
 export interface SearchQuery {
   text?: string;
   client_id?: Id;
@@ -117,6 +125,7 @@ export interface HistoryEntry {
 export interface ProjectCard {
   project: Rec<Project>;
   client_name: string;
+  client_color: string | null;
   last_activity: string;
   running: boolean;
 }

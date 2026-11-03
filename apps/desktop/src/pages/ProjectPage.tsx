@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { call, type ProjectOverview, type Rec, type TimeEntry, type TimerState } from "../api";
 import type { Data } from "../App";
+import { colorOf } from "../colors";
+import { ColorDot } from "../components/Color";
 import { EntryForm } from "../components/EntryForm";
 import { EntryList } from "../components/EntryList";
 import { ErrorLine, errorText } from "../components/Errors";
@@ -68,6 +70,7 @@ export function ProjectPage({
       </button>
       <div className="row title">
         <h1>
+          <ColorDot color={colorOf(project.payload, client?.payload)} />
           {client?.payload.name} / {project.payload.name}
         </h1>
         <button
@@ -106,7 +109,7 @@ export function ProjectPage({
           {t("ui.entries.view_week")}
         </label>
       </div>
-      <EntryList data={data} entries={entries} view={view} onChanged={changed} />
+      <EntryList data={data} entries={entries} view={view} onChanged={changed} hideProject />
       <button className="link" onClick={() => setWindowDays(windowDays + settings.entry_window_days)}>
         {t("ui.entries.older", { count: windowDays })}
       </button>
