@@ -101,7 +101,6 @@ export function EntryList({
                   {!hideProject && <th scope="col">{t("ui.entries.project")}</th>}
                   <th scope="col">{t("ui.entries.category")}</th>
                   <th scope="col">{t("ui.entries.description")}</th>
-                  <th scope="col">{t("ui.entries.tags")}</th>
                   <th scope="col">{t("ui.entries.billable")}</th>
                   <td />
                 </tr>
@@ -115,7 +114,7 @@ export function EntryList({
                         key={rec.id}
                         data={data}
                         rec={rec}
-                        columns={hideProject ? 8 : 9}
+                        columns={hideProject ? 7 : 8}
                         onDone={async (changed) => {
                           setEditing(null);
                           if (changed) await onChanged();
@@ -204,9 +203,8 @@ function ViewRow({
       <td>{n.category}</td>
       <td>
         {e.piece_count > 1 && <span title={t("ui.entries.split_link")}>↔ </span>}
-        <DescriptionText text={e.description} />
+        <DescriptionText text={e.description} tags={e.tags} />
       </td>
-      <td>{e.tags.join(", ")}</td>
       <td>{e.billable ? t("ui.yes") : t("ui.no")}</td>
       <td className="actions">
         <button onClick={onEdit} aria-label={t("ui.entries.edit_label", { description: e.description })}>
@@ -222,7 +220,7 @@ function ViewRow({
     </tr>
     {historyOpen && (
       <tr>
-        <td colSpan={hideProject ? 8 : 9}>
+        <td colSpan={hideProject ? 7 : 8}>
           <HistoryPanel data={data} id={rec.id} />
         </td>
       </tr>

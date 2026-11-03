@@ -250,5 +250,6 @@
   "color.purple": "Violett",
   "color.pink": "Pink",
   "color.brown": "Braun",
-  "color.gray": "Grau"
+  "color.gray": "Grau",
+  "ui.entries.tags_label": "Tags"
 }

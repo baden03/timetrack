@@ -161,3 +161,8 @@ ul.notes { flex-basis: 100%; }
 ul.notes li { display: flex; align-items: baseline; gap: .5rem; }
 ul.notes li button.link { margin: 0; padding: 0 .2rem; }
 ul.bullets { margin: 0; }
+
+/* Tags follow the description */
+.tags { display: inline-flex; flex-wrap: wrap; gap: .25rem; margin-inline-start: .5rem; vertical-align: baseline; }
+ul.bullets + .tags, .tags:first-child { display: flex; margin-inline-start: 0; margin-block-start: .25rem; }
+.tag { font-size: .75rem; padding: 0 .45rem; border: 1px solid var(--border-strong); border-radius: 999px; color: var(--muted); white-space: nowrap; }

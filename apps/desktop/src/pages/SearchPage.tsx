@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { call, type SearchQuery, type SearchResult } from "../api";
 import type { Data } from "../App";
+import { DescriptionText } from "../components/DescriptionText";
 import { ErrorLine, errorText } from "../components/Errors";
 import { t, tError } from "../i18n";
 import { colorOf } from "../colors";
@@ -127,7 +128,6 @@ export function SearchPage({ data }: { data: Data }) {
                   <th>{t("ui.entries.project")}</th>
                   <th>{t("ui.entries.category")}</th>
                   <th>{t("ui.entries.description")}</th>
-                  <th>{t("ui.entries.tags")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -149,8 +149,9 @@ export function SearchPage({ data }: { data: Data }) {
                         {name(data.clients, project?.payload.client_id ?? "")} / {project?.payload.name}
                       </td>
                       <td>{name(data.categories, e.category_id ?? "")}</td>
-                      <td>{e.description}</td>
-                      <td>{e.tags.join(", ")}</td>
+                      <td>
+                        <DescriptionText text={e.description} tags={e.tags} />
+                      </td>
                     </tr>
                   );
                 })}
