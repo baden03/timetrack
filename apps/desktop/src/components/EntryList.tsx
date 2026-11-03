@@ -1,0 +1,277 @@
+import { useState } from "react";
+import { call, type Rec, type TimeEntry, type Timing } from "../api";
+import type { Data } from "../App";
+import { ErrorLine, errorText } from "./Errors";
+import { t } from "../i18n";
+import { clockIn, displayDate, displayTime, formatHhmm, parseHhmm } from "../time";
+
+export function EntryList({
+  data,
+  entries,
+  onChanged,
+}: {
+  data: Data;
+  entries: Rec<TimeEntry>[];
+  onChanged: () => Promise<void>;
+}) {
+  const settings = data.state.settings.payload;
+  const [editing, setEditing] = useState<string | null>(null); // record id of the row being edited
+  const [error, setError] = useState<string | null>(null);
+
+  if (entries.length === 0) return <p className="muted">{t("ui.entries.empty")}</p>;
+
+  const byDate = new Map<string, Rec<TimeEntry>[]>();
+  for (const e of [...entries].sort((a, b) => a.payload.piece_index - b.payload.piece_index)) {
+    const list = byDate.get(e.payload.work_date) ?? [];
+    list.push(e);
+    byDate.set(e.payload.work_date, list);
+  }
+  const dates = [...byDate.keys()].sort().reverse();
+
+  const remove = async (e: Rec<TimeEntry>) => {
+    const text =
+      e.payload.piece_count > 1 ? t("ui.entries.delete_group_confirm") : t("ui.entries.delete_confirm");
+    if (!window.confirm(text)) return;
+    try {
+      await call("delete_entry", { group: e.payload.group_id });
+      await onChanged();
+    } catch (err) {
+      setError(errorText(err));
+    }
+  };
+
+  return (
+    <div>
+      <ErrorLine message={error} />
+      {dates.map((date) => {
+        const rows = byDate.get(date)!;
+        const total = rows.reduce((sum, r) => sum + r.payload.minutes, 0);
+        return (
+          <section key={date} className="day">
+            <h2>
+              {displayDate(date, settings.date_format)}
+              <span className="total">{formatHhmm(total)}</span>
+            </h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>{t("ui.entries.from")}</th>
+                  <th>{t("ui.entries.to")}</th>
+                  <th>{t("ui.entries.duration")}</th>
+                  <th>{t("ui.entries.project")}</th>
+                  <th>{t("ui.entries.category")}</th>
+                  <th>{t("ui.entries.description")}</th>
+                  <th>{t("ui.entries.tags")}</th>
+                  <th>{t("ui.entries.billable")}</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {rows
+                  .sort((a, b) => (a.payload.start_at ?? "").localeCompare(b.payload.start_at ?? ""))
+                  .map((rec) =>
+                    editing === rec.id ? (
+                      <EditRow
+                        key={rec.id}
+                        data={data}
+                        rec={rec}
+                        onDone={async (changed) => {
+                          setEditing(null);
+                          if (changed) await onChanged();
+                        }}
+                      />
+                    ) : (
+                      <ViewRow
+                        key={rec.id}
+                        data={data}
+                        rec={rec}
+                        onEdit={() => setEditing(rec.id)}
+                        onDelete={() => remove(rec)}
+                      />
+                    ),
+                  )}
+              </tbody>
+            </table>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function names(data: Data, e: TimeEntry) {
+  const project = data.projects.find((p) => p.id === e.project_id);
+  const client = data.clients.find((c) => c.id === project?.payload.client_id);
+  const category = data.categories.find((c) => c.id === e.category_id);
+  return {
+    project: `${client?.payload.name ?? ""} / ${project?.payload.name ?? ""}`,
+    category: category?.payload.name ?? "",
+  };
+}
+
+function ViewRow({
+  data,
+  rec,
+  onEdit,
+  onDelete,
+}: {
+  data: Data;
+  rec: Rec<TimeEntry>;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const e = rec.payload;
+  const s = data.state.settings.payload;
+  const n = names(data, e);
+  // Pieces ending at midnight show 24:00 (concept open item 35).
+  const endsAtMidnight =
+    e.end_at !== null && e.piece_index < e.piece_count - 1 && e.piece_count > 1;
+  return (
+    <tr tabIndex={0} onDoubleClick={onEdit} onKeyDown={(k) => k.key === "Enter" && onEdit()}>
+      <td>{e.start_at ? displayTime(e.start_at, e.timezone, s.clock_24h) : "–"}</td>
+      <td>{e.end_at ? (endsAtMidnight ? "24:00" : displayTime(e.end_at, e.timezone, s.clock_24h)) : "–"}</td>
+      <td>{formatHhmm(e.minutes)}</td>
+      <td>{n.project}</td>
+      <td>{n.category}</td>
+      <td>
+        {e.piece_count > 1 && <span title={t("ui.entries.split_link")}>↔ </span>}
+        {e.description}
+      </td>
+      <td>{e.tags.join(", ")}</td>
+      <td>{e.billable ? t("ui.yes") : t("ui.no")}</td>
+      <td className="actions">
+        <button onClick={onEdit}>{t("ui.edit")}</button>
+        <button className="danger" onClick={onDelete}>
+          {t("ui.entries.delete")}
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+function EditRow({
+  data,
+  rec,
+  onDone,
+}: {
+  data: Data;
+  rec: Rec<TimeEntry>;
+  onDone: (changed: boolean) => Promise<void>;
+}) {
+  const e = rec.payload;
+  const interval = e.kind === "interval";
+  // The whole span of a split entry is edited as one (concept §8.5).
+  const firstDate = interval && e.span_start_at ? spanDate(e, data) : e.work_date;
+  const [date, setDate] = useState(firstDate);
+  const [start, setStart] = useState(e.span_start_at ? clockIn(e.span_start_at, e.timezone) : "");
+  const [end, setEnd] = useState(e.span_end_at ? clockIn(e.span_end_at, e.timezone) : "");
+  const [duration, setDuration] = useState(formatHhmm(e.minutes));
+  const [categoryId, setCategoryId] = useState(e.category_id);
+  const [description, setDescription] = useState(e.description);
+  const [tags, setTags] = useState(e.tags.join(", "));
+  const [billable, setBillable] = useState(e.billable);
+  const [error, setError] = useState<string | null>(null);
+
+  const project = data.projects.find((p) => p.id === e.project_id);
+  const categories = data.categories.filter(
+    (c) => c.id === e.category_id || project?.payload.category_ids.includes(c.id),
+  );
+
+  const save = async () => {
+    let timing: Timing | undefined;
+    if (interval) {
+      timing = { mode: "interval", date, start, end };
+    } else {
+      const minutes = parseHhmm(duration);
+      if (minutes === null) return setError(t("error.duration_out_of_range"));
+      timing = { mode: "duration", date, minutes };
+    }
+    try {
+      await call("update_entry", {
+        group: e.group_id,
+        patch: {
+          category_id: categoryId,
+          description,
+          billable,
+          tags: tags.split(",").map((x) => x.trim()).filter(Boolean),
+          timing,
+        },
+      });
+      await onDone(true);
+    } catch (err) {
+      // The row stays open with the edited values (concept §14.3).
+      setError(errorText(err));
+    }
+  };
+  const keys = (k: React.KeyboardEvent) => {
+    if (k.key === "Escape") void onDone(false);
+    if (k.key === "Enter" && !k.shiftKey) {
+      k.preventDefault();
+      void save();
+    }
+  };
+
+  return (
+    <tr className="editing" onKeyDown={keys}>
+      <td colSpan={9}>
+        <ErrorLine message={error} />
+        <div className="row">
+          <label>
+            {t("ui.entries.date")}
+            <input autoFocus type="date" value={date} onChange={(x) => setDate(x.target.value)} />
+          </label>
+          {interval ? (
+            <>
+              <label>
+                {t("ui.entries.from")}
+                <input type="time" value={start} onChange={(x) => setStart(x.target.value)} />
+              </label>
+              <label>
+                {t("ui.entries.to")}
+                <input type="time" value={end} onChange={(x) => setEnd(x.target.value)} />
+              </label>
+            </>
+          ) : (
+            <label>
+              {t("ui.entries.duration")}
+              <input value={duration} onChange={(x) => setDuration(x.target.value)} />
+            </label>
+          )}
+          <label>
+            {t("ui.entries.category")}
+            <select value={categoryId} onChange={(x) => setCategoryId(x.target.value)}>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.payload.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grow">
+            {t("ui.entries.description")}
+            <input value={description} onChange={(x) => setDescription(x.target.value)} />
+          </label>
+          <label>
+            {t("ui.entries.tags")}
+            <input value={tags} onChange={(x) => setTags(x.target.value)} />
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={billable} onChange={(x) => setBillable(x.target.checked)} />
+            {t("ui.entries.billable")}
+          </label>
+          <span className="actions">
+            <button onClick={() => void save()}>{t("ui.save")}</button>
+            <button onClick={() => void onDone(false)}>{t("ui.cancel")}</button>
+          </span>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+/** Local date of the start of the whole span, in the entry's zone. */
+function spanDate(e: TimeEntry, _data: Data): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: e.timezone }).format(
+    new Date(e.span_start_at!),
+  );
+}

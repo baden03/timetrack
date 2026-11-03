@@ -1,0 +1,12 @@
+//! The application service: the one place where commands are validated and
+//! applied. The desktop shell (and later the hub and a public API) call this
+//! and nothing underneath it. It never touches the user interface.
+
+mod dispatch;
+mod entries;
+mod error;
+mod service;
+
+pub use entries::{EntryPatch, NewEntry, SavedEntry, Suggestion, Timing};
+pub use error::{AppError, Result};
+pub use service::{system_clock, App, AppState, Clock, Identity, ProjectInput};

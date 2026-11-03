@@ -3,5 +3,6 @@
 
 pub mod i18n;
 pub mod id;
+pub mod model;
 pub mod record;
 pub mod time;

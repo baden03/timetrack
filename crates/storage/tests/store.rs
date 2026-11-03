@@ -88,7 +88,7 @@ fn sqlite_lifecycle_on_disk_survives_reopen() {
     }
     let store = SqliteStore::open(&path).unwrap();
     assert_eq!(store.get(&r.id).unwrap().unwrap(), r);
-    assert_eq!(store.schema_version().unwrap(), 1);
+    assert_eq!(store.schema_version().unwrap(), 2);
     std::fs::remove_dir_all(&dir).ok();
 }
 
@@ -139,4 +139,79 @@ fn two_independent_databases_never_collide() {
         .collect();
     assert_eq!(ids_a.len(), 500);
     assert!(ids_a.is_disjoint(&ids_b));
+}
+
+#[test]
+fn put_many_is_all_or_nothing() {
+    let mut store = SqliteStore::open_in_memory().unwrap();
+    let ids = IdGenerator::new(Origin::random());
+    let (a, ha) = Record::create(
+        &ids,
+        "entry",
+        json!({"work_date": "2026-11-02"}),
+        actor(),
+        at("2026-11-03T09:00:00Z"),
+    );
+    let (b, hb) = Record::create(
+        &ids,
+        "entry",
+        json!({"work_date": "2026-11-03"}),
+        actor(),
+        at("2026-11-03T09:00:00Z"),
+    );
+    store.put(&a, &ha).unwrap();
+    // b is fine, but a stale copy of a is not: nothing may be stored.
+    let (stale, hs) = a
+        .revise(
+            json!({"work_date": "2026-11-09"}),
+            actor(),
+            at("2026-11-03T10:00:00Z"),
+        )
+        .unwrap();
+    store.put(&stale, &hs).unwrap();
+    assert!(store.put_many(&[(b.clone(), hb), (stale, hs)]).is_err());
+    assert!(store.get(&b.id).unwrap().is_none());
+}
+
+#[test]
+fn queries_by_date_and_group_and_meta() {
+    let mut store = SqliteStore::open_in_memory().unwrap();
+    let ids = IdGenerator::new(Origin::random());
+    for (d, g) in [
+        ("2026-11-01", "g1"),
+        ("2026-11-02", "g1"),
+        ("2026-11-05", "g2"),
+    ] {
+        let (r, h) = Record::create(
+            &ids,
+            "entry",
+            json!({"work_date": d, "group_id": g}),
+            actor(),
+            at("2026-11-06T09:00:00Z"),
+        );
+        store.put(&r, &h).unwrap();
+    }
+    let dates = |from, to| -> Vec<String> {
+        store
+            .list_by_date("entry", from, to)
+            .unwrap()
+            .iter()
+            .map(|r| r.payload["work_date"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    assert_eq!(dates(None, None).len(), 3);
+    assert_eq!(
+        dates(Some("2026-11-02"), Some("2026-11-04")),
+        ["2026-11-02"]
+    );
+    assert_eq!(
+        dates(Some("2026-11-02"), None),
+        ["2026-11-02", "2026-11-05"]
+    );
+    assert_eq!(store.list_by_group("entry", "g1").unwrap().len(), 2);
+
+    assert_eq!(store.meta_get("origin").unwrap(), None);
+    store.meta_set("origin", "abc").unwrap();
+    store.meta_set("origin", "def").unwrap();
+    assert_eq!(store.meta_get("origin").unwrap().as_deref(), Some("def"));
 }

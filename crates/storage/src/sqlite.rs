@@ -7,7 +7,8 @@ use timetrack_core::record::{Actor, HistoryEntry, Op, Record};
 use crate::{Store, StoreError};
 
 /// Ordered migrations. The database's `user_version` is the number applied.
-const MIGRATIONS: &[&str] = &["CREATE TABLE records (
+const MIGRATIONS: &[&str] = &[
+    "CREATE TABLE records (
         id          TEXT PRIMARY KEY,
         kind        TEXT NOT NULL,
         revision    INTEGER NOT NULL,
@@ -35,7 +36,16 @@ const MIGRATIONS: &[&str] = &["CREATE TABLE records (
     CREATE TRIGGER history_no_update BEFORE UPDATE ON history
         BEGIN SELECT RAISE(ABORT, 'history is append-only'); END;
     CREATE TRIGGER history_no_delete BEFORE DELETE ON history
-        BEGIN SELECT RAISE(ABORT, 'history is append-only'); END;"];
+        BEGIN SELECT RAISE(ABORT, 'history is append-only'); END;",
+    // 2: installation meta and indexed views of payload fields.
+    "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    ALTER TABLE records ADD COLUMN work_date TEXT
+        GENERATED ALWAYS AS (json_extract(payload, '$.work_date')) VIRTUAL;
+    ALTER TABLE records ADD COLUMN group_id TEXT
+        GENERATED ALWAYS AS (json_extract(payload, '$.group_id')) VIRTUAL;
+    CREATE INDEX records_date ON records (kind, work_date);
+    CREATE INDEX records_group ON records (kind, group_id);",
+];
 
 pub struct SqliteStore {
     conn: Connection,
@@ -129,57 +139,112 @@ fn stored_revision(tx: &Transaction<'_>, id: &Id) -> Result<Option<u64>, StoreEr
         .map(|v| v as u64))
 }
 
+fn put_in(tx: &Transaction<'_>, record: &Record, entry: &HistoryEntry) -> Result<(), StoreError> {
+    if entry.record_id != record.id || entry.revision != record.revision {
+        return Err(StoreError::Storage(
+            "history entry does not match record".into(),
+        ));
+    }
+    let stored = stored_revision(tx, &record.id)?;
+    let expected = stored.map_or(1, |r| r + 1);
+    if record.revision != expected {
+        return Err(StoreError::RevisionConflict {
+            stored: stored.unwrap_or(0),
+            got: record.revision,
+        });
+    }
+    tx.execute(
+        "INSERT INTO records (id, kind, revision, deleted, created_by, updated_by,
+                              created_at, updated_at, payload)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+         ON CONFLICT(id) DO UPDATE SET
+            revision = excluded.revision, deleted = excluded.deleted,
+            updated_by = excluded.updated_by, updated_at = excluded.updated_at,
+            payload = excluded.payload",
+        params![
+            record.id.as_str(),
+            record.kind,
+            record.revision as i64,
+            record.deleted as i64,
+            json(&record.created_by)?,
+            json(&record.updated_by)?,
+            stamp(record.created_at),
+            stamp(record.updated_at),
+            json(&record.payload)?,
+        ],
+    )?;
+    tx.execute(
+        "INSERT INTO history (record_id, kind, revision, op, actor, at, before, after)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![
+            entry.record_id.as_str(),
+            entry.kind,
+            entry.revision as i64,
+            entry.op.as_str(),
+            json(&entry.actor)?,
+            stamp(entry.at),
+            entry.before.as_ref().map(json).transpose()?,
+            entry.after.as_ref().map(json).transpose()?,
+        ],
+    )?;
+    Ok(())
+}
+
 impl Store for SqliteStore {
-    fn put(&mut self, record: &Record, entry: &HistoryEntry) -> Result<(), StoreError> {
-        if entry.record_id != record.id || entry.revision != record.revision {
-            return Err(StoreError::Storage(
-                "history entry does not match record".into(),
-            ));
-        }
+    fn put_many(&mut self, changes: &[(Record, HistoryEntry)]) -> Result<(), StoreError> {
         let tx = self.conn.transaction()?;
-        let stored = stored_revision(&tx, &record.id)?;
-        let expected = stored.map_or(1, |r| r + 1);
-        if record.revision != expected {
-            return Err(StoreError::RevisionConflict {
-                stored: stored.unwrap_or(0),
-                got: record.revision,
-            });
+        for (record, entry) in changes {
+            put_in(&tx, record, entry)?;
         }
-        tx.execute(
-            "INSERT INTO records (id, kind, revision, deleted, created_by, updated_by,
-                                  created_at, updated_at, payload)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-             ON CONFLICT(id) DO UPDATE SET
-                revision = excluded.revision, deleted = excluded.deleted,
-                updated_by = excluded.updated_by, updated_at = excluded.updated_at,
-                payload = excluded.payload",
-            params![
-                record.id.as_str(),
-                record.kind,
-                record.revision as i64,
-                record.deleted as i64,
-                json(&record.created_by)?,
-                json(&record.updated_by)?,
-                stamp(record.created_at),
-                stamp(record.updated_at),
-                json(&record.payload)?,
-            ],
-        )?;
-        tx.execute(
-            "INSERT INTO history (record_id, kind, revision, op, actor, at, before, after)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![
-                entry.record_id.as_str(),
-                entry.kind,
-                entry.revision as i64,
-                entry.op.as_str(),
-                json(&entry.actor)?,
-                stamp(entry.at),
-                entry.before.as_ref().map(json).transpose()?,
-                entry.after.as_ref().map(json).transpose()?,
-            ],
-        )?;
         tx.commit()?;
+        Ok(())
+    }
+
+    fn list_by_date(
+        &self,
+        kind: &str,
+        from: Option<&str>,
+        to: Option<&str>,
+    ) -> Result<Vec<Record>, StoreError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT * FROM records
+             WHERE kind = ?1 AND deleted = 0
+               AND (?2 IS NULL OR work_date >= ?2) AND (?3 IS NULL OR work_date <= ?3)
+             ORDER BY work_date, id",
+        )?;
+        let mut rows = stmt.query(params![kind, from, to])?;
+        let mut out = Vec::new();
+        while let Some(row) = rows.next()? {
+            out.push(record_from_row(row)?);
+        }
+        Ok(out)
+    }
+
+    fn list_by_group(&self, kind: &str, group: &str) -> Result<Vec<Record>, StoreError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT * FROM records WHERE kind = ?1 AND group_id = ?2 AND deleted = 0 ORDER BY id",
+        )?;
+        let mut rows = stmt.query(params![kind, group])?;
+        let mut out = Vec::new();
+        while let Some(row) = rows.next()? {
+            out.push(record_from_row(row)?);
+        }
+        Ok(out)
+    }
+
+    fn meta_get(&self, key: &str) -> Result<Option<String>, StoreError> {
+        Ok(self
+            .conn
+            .query_row("SELECT value FROM meta WHERE key = ?1", [key], |r| r.get(0))
+            .optional()?)
+    }
+
+    fn meta_set(&mut self, key: &str, value: &str) -> Result<(), StoreError> {
+        self.conn.execute(
+            "INSERT INTO meta (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![key, value],
+        )?;
         Ok(())
     }
 

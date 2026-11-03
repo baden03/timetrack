@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/storage", "crates/hub"]
+members = ["crates/core", "crates/storage", "crates/app", "crates/hub"]
 # The desktop shell has its own workspace so the core checks do not build Tauri.
 exclude = ["apps/desktop/src-tauri"]
 

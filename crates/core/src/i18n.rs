@@ -36,7 +36,9 @@ impl Catalog {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{id::IdError, record::RecordError, time::SplitProblem, time::TimeError};
+    use crate::{
+        id::IdError, model::ModelError, record::RecordError, time::SplitProblem, time::TimeError,
+    };
 
     #[test]
     fn every_error_code_has_english_text() {
@@ -53,6 +55,11 @@ mod tests {
             RecordError::BrokenHistory(1).code(),
             IdError::InvalidOrigin.code(),
             IdError::InvalidId.code(),
+            ModelError::NameRequired.code(),
+            ModelError::DescriptionRequired.code(),
+            ModelError::EmptyTag.code(),
+            ModelError::TagTooLong.code(),
+            ModelError::TooManyTags.code(),
         ];
         for code in codes {
             assert!(
