@@ -89,15 +89,15 @@ export function EntryList({
             <table>
               <thead>
                 <tr>
-                  <th>{t("ui.entries.from")}</th>
-                  <th>{t("ui.entries.to")}</th>
-                  <th>{t("ui.entries.duration")}</th>
-                  <th>{t("ui.entries.project")}</th>
-                  <th>{t("ui.entries.category")}</th>
-                  <th>{t("ui.entries.description")}</th>
-                  <th>{t("ui.entries.tags")}</th>
-                  <th>{t("ui.entries.billable")}</th>
-                  <th />
+                  <th scope="col">{t("ui.entries.from")}</th>
+                  <th scope="col">{t("ui.entries.to")}</th>
+                  <th scope="col">{t("ui.entries.duration")}</th>
+                  <th scope="col">{t("ui.entries.project")}</th>
+                  <th scope="col">{t("ui.entries.category")}</th>
+                  <th scope="col">{t("ui.entries.description")}</th>
+                  <th scope="col">{t("ui.entries.tags")}</th>
+                  <th scope="col">{t("ui.entries.billable")}</th>
+                  <td />
                 </tr>
               </thead>
               <tbody>
@@ -112,6 +112,10 @@ export function EntryList({
                         onDone={async (changed) => {
                           setEditing(null);
                           if (changed) await onChanged();
+                          // Keep the keyboard where it was: on the row just edited.
+                          requestAnimationFrame(() =>
+                            document.querySelector<HTMLElement>(`[data-record="${rec.id}"]`)?.focus(),
+                          );
                         }}
                       />
                     ) : (
@@ -169,7 +173,14 @@ function ViewRow({
     e.end_at !== null && e.piece_index < e.piece_count - 1 && e.piece_count > 1;
   return (
     <>
-    <tr tabIndex={0} onDoubleClick={onEdit} onKeyDown={(k) => k.key === "Enter" && onEdit()}>
+    <tr
+      tabIndex={0}
+      data-record={rec.id}
+      aria-label={t("ui.entries.row_label", { description: e.description })}
+      onDoubleClick={onEdit}
+      // Enter on the row itself edits it; on a button inside it, the button acts.
+      onKeyDown={(k) => k.key === "Enter" && k.target === k.currentTarget && onEdit()}
+    >
       <td>{e.start_at ? displayTime(e.start_at, e.timezone, s.clock_24h) : "–"}</td>
       <td>{e.end_at ? (endsAtMidnight ? "24:00" : displayTime(e.end_at, e.timezone, s.clock_24h)) : "–"}</td>
       <td>{formatHhmm(e.minutes)}</td>
@@ -182,9 +193,13 @@ function ViewRow({
       <td>{e.tags.join(", ")}</td>
       <td>{e.billable ? t("ui.yes") : t("ui.no")}</td>
       <td className="actions">
-        <button onClick={onEdit}>{t("ui.edit")}</button>
-        <button onClick={onHistory}>{historyOpen ? t("ui.history.hide") : t("ui.history.show")}</button>
-        <button className="danger" onClick={onDelete}>
+        <button onClick={onEdit} aria-label={t("ui.entries.edit_label", { description: e.description })}>
+          {t("ui.edit")}
+        </button>
+        <button onClick={onHistory} aria-expanded={historyOpen}>
+          {historyOpen ? t("ui.history.hide") : t("ui.history.show")}
+        </button>
+        <button className="danger" onClick={onDelete} aria-label={t("ui.entries.delete_label", { description: e.description })}>
           {t("ui.entries.delete")}
         </button>
       </td>

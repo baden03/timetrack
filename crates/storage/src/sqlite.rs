@@ -4,7 +4,7 @@ use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use timetrack_core::id::Id;
 use timetrack_core::record::{Actor, HistoryEntry, Op, Record};
 
-use crate::{Store, StoreError};
+use crate::{BackupInfo, Store, StoreError};
 
 /// Ordered migrations. The database's `user_version` is the number applied.
 const MIGRATIONS: &[&str] = &[
@@ -52,8 +52,18 @@ pub struct SqliteStore {
 }
 
 impl SqliteStore {
+    /// Opens (creating if needed) the database file. A file from an older
+    /// version is copied to `<file>.pre-v<N>.bak` before it is migrated, and
+    /// the copy is kept (concept §16.3).
     pub fn open(path: &Path) -> Result<Self, StoreError> {
-        Self::init(Connection::open(path)?)
+        let conn = Connection::open(path)?;
+        let current: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
+        if current > 0 && current < MIGRATIONS.len() as i64 {
+            let mut name = path.as_os_str().to_owned();
+            name.push(format!(".pre-v{current}.bak"));
+            copy_database(&conn, Path::new(&name))?;
+        }
+        Self::init(conn)
     }
 
     pub fn open_in_memory() -> Result<Self, StoreError> {
@@ -88,6 +98,39 @@ impl SqliteStore {
         }
         Ok(())
     }
+}
+
+/// Copies a database into a new single file using SQLite's backup API, which
+/// is safe while the database is in use. Written to a temporary name and
+/// renamed, so a failed copy never replaces a good file.
+fn copy_database(source: &Connection, path: &Path) -> Result<(), StoreError> {
+    let mut tmp_name = path.as_os_str().to_owned();
+    tmp_name.push(".tmp");
+    let tmp = std::path::PathBuf::from(tmp_name);
+    let _ = std::fs::remove_file(&tmp);
+    {
+        let mut dest = Connection::open(&tmp)?;
+        {
+            let backup = rusqlite::backup::Backup::new(source, &mut dest)?;
+            backup.run_to_completion(256, std::time::Duration::from_millis(5), None)?;
+        }
+        // One self-contained file, not a main file plus a write-ahead log.
+        dest.pragma_update(None, "journal_mode", "DELETE")?;
+    }
+    std::fs::rename(&tmp, path).map_err(|e| StoreError::Storage(e.to_string()))?;
+    Ok(())
+}
+
+fn count(conn: &Connection, table: &str) -> Result<i64, StoreError> {
+    Ok(conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))?)
+}
+
+fn info_of(conn: &Connection) -> Result<BackupInfo, StoreError> {
+    Ok(BackupInfo {
+        schema_version: conn.pragma_query_value(None, "user_version", |r| r.get(0))?,
+        records: count(conn, "records")?,
+        history_entries: count(conn, "history")?,
+    })
 }
 
 fn json<T: serde::Serialize>(value: &T) -> Result<String, StoreError> {
@@ -294,5 +337,52 @@ impl Store for SqliteStore {
             });
         }
         Ok(out)
+    }
+
+    fn backup_to(&self, path: &Path) -> Result<BackupInfo, StoreError> {
+        copy_database(&self.conn, path)?;
+        info_of(&self.conn)
+    }
+
+    fn inspect_backup(path: &Path) -> Result<BackupInfo, StoreError> {
+        use rusqlite::OpenFlags;
+        if !path.is_file() {
+            return Err(StoreError::NotABackup);
+        }
+        let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .map_err(|_| StoreError::NotABackup)?;
+        // Not a database at all fails here.
+        let tables: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('records', 'history')",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(|_| StoreError::NotABackup)?;
+        if tables != 2 {
+            return Err(StoreError::NotABackup);
+        }
+        let check: String = conn.query_row("PRAGMA integrity_check", [], |r| r.get(0))?;
+        if check != "ok" {
+            return Err(StoreError::NotABackup);
+        }
+        let info = info_of(&conn)?;
+        if info.schema_version < 1 || info.schema_version > MIGRATIONS.len() as i64 {
+            return Err(StoreError::UnsupportedSchema(info.schema_version));
+        }
+        Ok(info)
+    }
+
+    fn restore_from(&mut self, path: &Path) -> Result<BackupInfo, StoreError> {
+        Self::inspect_backup(path)?;
+        self.conn.restore(
+            rusqlite::MAIN_DB,
+            path,
+            None::<fn(rusqlite::backup::Progress)>,
+        )?;
+        self.conn.pragma_update(None, "journal_mode", "WAL")?;
+        // A backup from an older version is brought up to date.
+        self.migrate()?;
+        info_of(&self.conn)
     }
 }

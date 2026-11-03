@@ -124,3 +124,9 @@ dl.tiles dt { color: var(--muted); font-size: .8rem; }
 dl.tiles dd { margin: 0; font-size: 1.3rem; font-variant-numeric: tabular-nums; }
 button.back { margin-block: 0 .5rem; padding: 0; }
 .row.title { align-items: center; justify-content: space-between; } .row.title h1 { margin: 0; }
+.banner { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; padding: .5rem .8rem; margin-block-end: 1rem; background: var(--surface); border: 1px solid var(--warning); border-radius: 8px; }
+
+.skip { position: absolute; left: -999px; top: 0; background: var(--surface); color: var(--text); padding: .4rem .8rem; border: 1px solid var(--border-strong); border-radius: 6px; z-index: 10; }
+.skip:focus { left: .5rem; top: .5rem; }
+main:focus { outline: none; }
+tr[tabindex]:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }

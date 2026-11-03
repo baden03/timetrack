@@ -38,6 +38,7 @@ export function EntryForm({
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const firstField = useRef<HTMLSelectElement>(null);
+  const categoryField = useRef<HTMLSelectElement>(null);
 
   const project = projects.find((p) => p.id === projectId);
   const categories = data.categories.filter(
@@ -93,7 +94,7 @@ export function EntryForm({
       setDuration("");
       await onSaved();
       await suggestFor(projectId, date);
-      firstField.current?.focus();
+      (firstField.current ?? categoryField.current)?.focus();
     } catch (e) {
       // A failed save keeps what was typed (concept §8.7).
       setError(errorText(e));
@@ -126,6 +127,7 @@ export function EntryForm({
         <label>
           {t("ui.entries.category")}
           <select
+            ref={categoryField}
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
           >
@@ -144,11 +146,11 @@ export function EntryForm({
         <fieldset className="modes">
           <legend>{t("ui.entries.mode")}</legend>
           <label className="check">
-            <input type="radio" checked={mode === "interval"} onChange={() => setMode("interval")} />
+            <input type="radio" name="entry-mode" checked={mode === "interval"} onChange={() => setMode("interval")} />
             {t("ui.entries.mode_interval")}
           </label>
           <label className="check">
-            <input type="radio" checked={mode === "duration"} onChange={() => setMode("duration")} />
+            <input type="radio" name="entry-mode" checked={mode === "duration"} onChange={() => setMode("duration")} />
             {t("ui.entries.mode_duration")}
           </label>
         </fieldset>

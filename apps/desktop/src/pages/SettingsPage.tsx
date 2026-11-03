@@ -4,11 +4,13 @@ import type { Data } from "../App";
 import { ErrorLine, errorText } from "../components/Errors";
 import { t } from "../i18n";
 import { DATE_FORMATS } from "../time";
+import { useBackup } from "../components/Backup";
 
 export function SettingsPage({ data, reload }: { data: Data; reload: () => Promise<void> }) {
   const [s, setS] = useState<Settings>(data.state.settings.payload);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const backup = useBackup(reload, data.state.settings.payload);
   const zones = (Intl as unknown as { supportedValuesOf(k: string): string[] }).supportedValuesOf(
     "timeZone",
   );
@@ -17,6 +19,7 @@ export function SettingsPage({ data, reload }: { data: Data; reload: () => Promi
     setSaved(false);
   };
   return (
+    <>
     <form
       className="card"
       onSubmit={async (e) => {
@@ -75,6 +78,15 @@ export function SettingsPage({ data, reload }: { data: Data; reload: () => Promi
         />
       </label>
       <label>
+        {t("ui.settings.backup_reminder")}
+        <input
+          type="number"
+          min={0}
+          value={s.backup_reminder_days}
+          onChange={(e) => set("backup_reminder_days", Math.max(0, Number(e.target.value) || 0))}
+        />
+      </label>
+      <label>
         {t("ui.settings.language")}
         <select value={s.language} disabled>
           <option value="en">English</option>
@@ -86,5 +98,21 @@ export function SettingsPage({ data, reload }: { data: Data; reload: () => Promi
       </div>
       <p className="muted">{t("ui.settings.identity", { origin: data.state.identity.origin })}</p>
     </form>
+    <section className="card">
+      {backup.dialog}
+      <h2>{t("ui.backup.title")}</h2>
+      <p className="muted">{t("ui.backup.last", { when: backup.describe(data.state.last_backup_at) })}</p>
+      <div className="actions">
+        <button disabled={backup.busy} onClick={() => void backup.backUpNow()}>
+          {t("ui.backup.now")}
+        </button>
+        <button disabled={backup.busy} onClick={() => void backup.restoreFromFile()}>
+          {t("ui.backup.restore")}
+        </button>
+      </div>
+      <ErrorLine message={backup.error} />
+      {backup.message && <p role="status">{backup.message}</p>}
+    </section>
+    </>
   );
 }

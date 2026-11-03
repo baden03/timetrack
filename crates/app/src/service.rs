@@ -30,6 +30,8 @@ pub struct Identity {
 #[derive(Debug, Clone, Serialize)]
 pub struct AppState {
     pub first_run: bool,
+    /// When the last backup was written, if ever.
+    pub last_backup_at: Option<String>,
     pub identity: Identity,
     pub settings: Record,
 }
@@ -49,59 +51,21 @@ pub struct App<S: Store> {
     pub(crate) actor: Actor,
     pub(crate) clock: Clock,
     settings_id: Id,
+    system_zone: String,
 }
 
 impl<S: Store> App<S> {
     /// Opens (or on first launch, initializes) an installation. `system_zone`
     /// is the device's IANA zone, used as the default for new entries.
     pub fn open(mut store: S, system_zone: &str, clock: Clock) -> Result<Self> {
-        let origin = match store.meta_get("origin")? {
-            Some(o) => Origin::new(&o)?,
-            None => {
-                let o = Origin::random();
-                store.meta_set("origin", o.as_str())?;
-                o
-            }
-        };
-        let ids = IdGenerator::new(origin);
-        let author = meta_or_new(&mut store, &ids, "author")?;
-        let device = meta_or_new(&mut store, &ids, "device")?;
-        let actor = Actor { author, device };
-
-        let settings_id = match store.meta_get("settings_id")? {
-            Some(id) => Id::parse(&id)?,
-            None => {
-                let zone = if system_zone.parse::<Tz>().is_ok() {
-                    system_zone
-                } else {
-                    "UTC"
-                };
-                let payload = Settings {
-                    language: "en".into(),
-                    timezone: zone.into(),
-                    date_format: "DD.MM.YYYY".into(),
-                    clock_24h: true,
-                    theme: Theme::System,
-                    entry_window_days: 60,
-                };
-                let (rec, hist) = Record::create(
-                    &ids,
-                    KIND_SETTINGS,
-                    serde_json::to_value(payload).expect("settings serialize"),
-                    actor.clone(),
-                    clock(),
-                );
-                store.put(&rec, &hist)?;
-                store.meta_set("settings_id", rec.id.as_str())?;
-                rec.id
-            }
-        };
+        let (ids, actor, settings_id) = bootstrap(&mut store, system_zone, &clock)?;
         Ok(App {
             store,
             ids,
             actor,
             clock,
             settings_id,
+            system_zone: system_zone.to_owned(),
         })
     }
 
@@ -120,9 +84,53 @@ impl<S: Store> App<S> {
     pub fn state(&self) -> Result<AppState> {
         Ok(AppState {
             first_run: self.store.meta_get("first_run_done")?.is_none(),
+            last_backup_at: self.store.meta_get("last_backup_at")?,
             identity: self.identity(),
             settings: self.settings()?,
         })
+    }
+
+    /// Writes a backup to one file and remembers when (concept §16.2).
+    pub fn backup(&mut self, path: &std::path::Path) -> Result<timetrack_storage::BackupInfo> {
+        // The time is stored first so the backup file carries it: after a
+        // restore, "last backup" is the time of the file that was restored.
+        let previous = self.store.meta_get("last_backup_at")?;
+        let stamp = self
+            .now()
+            .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        self.store.meta_set("last_backup_at", &stamp)?;
+        match self.store.backup_to(path) {
+            Ok(info) => Ok(info),
+            Err(e) => {
+                if let Some(old) = previous {
+                    self.store.meta_set("last_backup_at", &old)?;
+                }
+                Err(e.into())
+            }
+        }
+    }
+
+    /// What a backup file holds, to confirm before replacing the current data.
+    pub fn inspect_backup(&self, path: &std::path::Path) -> Result<timetrack_storage::BackupInfo> {
+        Ok(S::inspect_backup(path)?)
+    }
+
+    /// Replaces all data with a backup. The current data is first copied to
+    /// `safety_copy`, so a mistaken restore can be undone; a file that is not
+    /// a valid backup is refused before anything changes.
+    pub fn restore(
+        &mut self,
+        path: &std::path::Path,
+        safety_copy: &std::path::Path,
+    ) -> Result<timetrack_storage::BackupInfo> {
+        S::inspect_backup(path)?;
+        self.store.backup_to(safety_copy)?;
+        let info = self.store.restore_from(path)?;
+        let (ids, actor, settings_id) = bootstrap(&mut self.store, &self.system_zone, &self.clock)?;
+        self.ids = ids;
+        self.actor = actor;
+        self.settings_id = settings_id;
+        Ok(info)
     }
 
     /// Records the stand-alone choice (architecture 5.9a).
@@ -324,6 +332,57 @@ impl<S: Store> App<S> {
         self.store.put(&next, &hist)?;
         Ok(())
     }
+}
+
+/// Reads or creates the installation's identity and settings.
+fn bootstrap<S: Store>(
+    store: &mut S,
+    system_zone: &str,
+    clock: &Clock,
+) -> Result<(IdGenerator, Actor, Id)> {
+    let origin = match store.meta_get("origin")? {
+        Some(o) => Origin::new(&o)?,
+        None => {
+            let o = Origin::random();
+            store.meta_set("origin", o.as_str())?;
+            o
+        }
+    };
+    let ids = IdGenerator::new(origin);
+    let author = meta_or_new(store, &ids, "author")?;
+    let device = meta_or_new(store, &ids, "device")?;
+    let actor = Actor { author, device };
+
+    let settings_id = match store.meta_get("settings_id")? {
+        Some(id) => Id::parse(&id)?,
+        None => {
+            let zone = if system_zone.parse::<Tz>().is_ok() {
+                system_zone
+            } else {
+                "UTC"
+            };
+            let payload = Settings {
+                language: "en".into(),
+                timezone: zone.into(),
+                date_format: "DD.MM.YYYY".into(),
+                clock_24h: true,
+                theme: Theme::System,
+                entry_window_days: 60,
+                backup_reminder_days: 7,
+            };
+            let (rec, hist) = Record::create(
+                &ids,
+                KIND_SETTINGS,
+                serde_json::to_value(payload).expect("settings serialize"),
+                actor.clone(),
+                clock(),
+            );
+            store.put(&rec, &hist)?;
+            store.meta_set("settings_id", rec.id.as_str())?;
+            rec.id
+        }
+    };
+    Ok((ids, actor, settings_id))
 }
 
 pub(crate) fn payload<T: DeserializeOwned>(rec: &Record) -> Result<T> {

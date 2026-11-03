@@ -15,6 +15,7 @@ import { FirstRun } from "./pages/FirstRun";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { SearchPage } from "./pages/SearchPage";
+import { BackupReminder } from "./components/BackupReminder";
 import { TimerBar } from "./components/TimerBar";
 import { SummaryPage } from "./pages/SummaryPage";
 import { SetupPage } from "./pages/SetupPage";
@@ -85,6 +86,9 @@ export function App() {
 
   return (
     <div className="shell">
+      <a className="skip" href="#main">
+        {t("ui.skip")}
+      </a>
       <nav aria-label={t("ui.nav.label")}>
         <strong className="brand">{t("ui.app.name")}</strong>
         {(["dashboard", "entries", "search", "summary", "setup", "settings"] as Page[]).map((p) => (
@@ -97,7 +101,8 @@ export function App() {
           </button>
         ))}
       </nav>
-      <main>
+      <main id="main" tabIndex={-1}>
+        <BackupReminder data={data} reload={reload} />
         <TimerBar
           data={data}
           version={version}
