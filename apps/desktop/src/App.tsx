@@ -14,6 +14,7 @@ import { EntriesPage } from "./pages/EntriesPage";
 import { FirstRun } from "./pages/FirstRun";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ProjectPage } from "./pages/ProjectPage";
+import { AboutPage } from "./pages/AboutPage";
 import { SearchPage } from "./pages/SearchPage";
 import { BackupReminder } from "./components/BackupReminder";
 import { TimerBar } from "./components/TimerBar";
@@ -28,7 +29,15 @@ export interface Data {
   categories: Rec<Category>[];
 }
 
-type Page = "dashboard" | "project" | "entries" | "search" | "summary" | "setup" | "settings";
+type Page =
+  | "dashboard"
+  | "project"
+  | "entries"
+  | "search"
+  | "summary"
+  | "setup"
+  | "settings"
+  | "about";
 
 export function App() {
   const [data, setData] = useState<Data | null>(null);
@@ -93,7 +102,7 @@ export function App() {
       </a>
       <nav aria-label={t("ui.nav.label")}>
         <strong className="brand">{t("ui.app.name")}</strong>
-        {(["dashboard", "entries", "search", "summary", "setup", "settings"] as Page[]).map((p) => (
+        {(["dashboard", "entries", "search", "summary", "setup", "settings", "about"] as Page[]).map((p) => (
           <button
             key={p}
             aria-current={page === p || (p === "dashboard" && page === "project") ? "page" : undefined}
@@ -133,6 +142,7 @@ export function App() {
         {page === "entries" && <EntriesPage data={data} version={version} />}
         {page === "search" && <SearchPage data={data} />}
         {page === "summary" && <SummaryPage data={data} />}
+        {page === "about" && <AboutPage />}
         {page === "setup" && <SetupPage data={data} reload={reload} />}
         {page === "settings" && <SettingsPage data={data} reload={reload} />}
       </main>
