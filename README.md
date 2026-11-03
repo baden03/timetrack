@@ -5,6 +5,7 @@
 **Supersedes:** Concept v1, the centralized multi-user design, archived at [docs/spec-v1-centralized.md](docs/spec-v1-centralized.md) (git tag `spec-v1-centralized`).
 **Background:** [docs/timetrack_architecture_decisions_2026-11-02.md](docs/timetrack_architecture_decisions_2026-11-02.md) records the brainstorming this concept builds on. Where the two differ, this document is current.
 **Architecture direction:** [docs/architecture.md](docs/architecture.md) (shared Rust domain core, separate desktop and hub applications).
+**Rollout plan:** [docs/plan.md](docs/plan.md) (phases, release scope and acceptance criteria). Where it moves a feature to a later release, the plan is current.
 **Also archived:** the 2024 prototype reconstruction, [docs/brief-v1.md](docs/brief-v1.md).
 
 This document is technology-agnostic. It states what the product does and the rules it follows, not how it is built.
@@ -73,6 +74,8 @@ The first usable release is **Phase 1 plus Phase 2**: the standalone app, then o
 - Mobile apps and a web client
 
 **Designed in now so later phases need no rewrite:** identifiers that carry their origin hub; `name@hub` identities; tombstones for deletions; ordering of one person's edits across devices; versioned entries; a versioned sync protocol.
+
+**Delivery in releases.** The first milestone is delivered in stages (see [docs/plan.md](docs/plan.md)). Release 1 is the standalone app, with its own acceptance criteria, plus a **monthly summary**: for a month, per client and project, by category, the total hours and the list of descriptions, copyable as text. Release 2 adds one hub with Owner and Collaborator roles. Release 3 adds invoice locks on hours. These move to later releases: owner-defined rates, rate rules, entry values and rate conflicts (§10), which matter only once a reporting module exists, because the billed rate lives in the invoicing software; owner amendments (§11); the Project manager preset and per-person overrides; ownership transfer; and the automatic split on a time-zone change. Sections 4, 10, 11 and 12 describe the complete design, not the content of the first release.
 
 ## 1.6 Primary platform
 
@@ -510,6 +513,18 @@ Recording fixes which calendar day an entry belongs to and how long it lasted. R
 
 Times are shown in the zone the author recorded them in, labelled when that differs from the viewer's. A viewer may choose to see times in their own zone, but the dates and totals used for accounting do not move.
 
+### Travelling across zones
+
+A person may record in one zone in the morning and another in the evening. Hours never depend on the zone, because a duration is the difference between two instants. A zone decides only which calendar date an entry belongs to and where a midnight split falls.
+
+- Each entry has its own zone. A day's total is the sum of its entries by their own local dates.
+- Overlap between entries is judged on the instants, never on local clock times.
+- Reports and invoice periods use each entry's own local date, so dates never move (see above).
+- There is no setting that attributes every day to a fixed "home" zone, because changing it would move dates and break locks. A display-only option is possible later and would never change stored dates.
+- Editing an entry's times interprets them in the entry's own zone. Changing the zone is a separate, explicit action.
+
+**Proposed (open items #37 and #38).** The zone field defaults to the device's current zone, and the entry shows its zone beside its times whenever it differs from the previous entry or the device, with one action to change it, because work entered later may belong to an earlier zone. A running timer that crosses a zone change is split silently at that instant into linked pieces, each with its own zone and offsets. Each piece then records why it begins where it does, `midnight` or `zone_change`. The hub checks a midnight boundary as described above, and a zone-change boundary by requiring contiguous pieces at the same instant with different zones.
+
 ## 8.6 Entry form
 
 - A compact single row on wide screens, wrapping on narrow ones.
@@ -765,7 +780,28 @@ Deletion is recorded as a marker (a tombstone) that syncs like any change, so de
 
 ## 13.5 Joining a hub
 
-A standalone user joins by signing in, linking the local identity, and choosing what to sync. Projects they own can be shared afterwards. They can disconnect and return to standalone, keeping their data.
+### First run
+
+The first launch of an installation asks how it will be used:
+
+- **Stand-alone.** A local identity is created. There is no account and no network use. The person can connect to a hub later from Settings.
+- **Part of a network** (sync between a person's own devices, collaboration with others, or both; both need a hub). The person either **joins an existing hub** with an invite link or a hub address, or **creates a hub** (see below).
+
+Two installations cannot sync with each other directly. They need a hub.
+
+### Joining a hub
+
+The app checks the hub's protocol version and records its permanent ID next to its DNS name, and warns if the name later points at a different hub. The person signs in on the hub's page in the system browser. A new account is made from an invite. A fresh installation pulls everything the person is entitled to. A new device for an existing account is just another device.
+
+An installation that already holds stand-alone data asks which projects to bring to the hub. The first installation to join claims its local identity as the account. A later installation signing in to the same account has its local identity recorded as an **alias** of the account, and the projects brought over are attributed to the account, with the original identity kept in provenance and an audited "install linked" event. Projects not chosen stay local and are never uploaded. Import is all-or-nothing per project, after a check.
+
+Projects and clients from two installations stay separate even when their names match. There is no project merge in the first milestone.
+
+A person can disconnect and return to stand-alone, keeping their data. The hub keeps its copy.
+
+### Creating a hub
+
+Creating a hub is an operator task, not a function of the desktop app. The app explains what is needed and then continues as for joining a hub once the operator has an address and a first invite. The hub's sign-in page needs a stable name and a valid certificate, because passkeys are bound to the web origin. The first account is created with the operator command line (§5.5). The options for where a hub runs are discussed in [docs/architecture.md](docs/architecture.md) (§5.9).
 
 ## 13.6 Hub validation
 
@@ -1133,6 +1169,12 @@ Each has a working default that the specification above already assumes.
 | 34 | Which timezone times are shown in by default | The author's recorded zone, labelled when it differs from the viewer's |
 | 35 | Display of the end of a piece at midnight (24:00 or 00:00) | 24:00 |
 | 36 | Whether the client uses bundled or operating-system timezone data | Open; the version used is recorded either way |
+| 37 | Default zone for entries made after the fact, and how the zone is shown (§8.5) | The device's current zone, with a visible label that changes it |
+| 38 | Automatic split of a running timer when the system zone changes, and the piece-boundary reason (§8.5) | Silent split, release 4 |
+| 39 | A project merge for two installations whose projects overlap | Not in the first milestone |
+| 40 | Where and how a hub is created (§13.5) | A server with a domain, one-command setup; other options in docs/architecture.md §5.9 |
+| 41 | Moving an installation from one hub to another | Disconnect and join again; open |
+| 42 | Sign-in method for a hub without a domain (device pairing) | Open; passkeys only for now |
 
 ---
 
