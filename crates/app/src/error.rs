@@ -38,6 +38,8 @@ pub enum AppError {
     StillReferenced,
     #[error("a timer is already running")]
     TimerRunning,
+    #[error("timer ran for less than a minute")]
+    TimerTooShort,
     #[error("no timer is running")]
     NoTimer,
     #[error("nothing to repeat")]
@@ -68,6 +70,7 @@ impl AppError {
             AppError::CategoryNotEnabled => "category_not_enabled",
             AppError::StillReferenced => "still_referenced",
             AppError::TimerRunning => "timer_running",
+            AppError::TimerTooShort => "timer_too_short",
             AppError::NoTimer => "no_timer",
             AppError::NothingToRepeat => "nothing_to_repeat",
             AppError::InvalidMonth => "invalid_month",

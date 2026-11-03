@@ -42,7 +42,7 @@ fn fixture() -> Fixture {
 fn interval(f: &Fixture, date: &str, start: &str, end: &str) -> NewEntry {
     NewEntry {
         project_id: f.project.clone(),
-        category_id: f.category.clone(),
+        category_id: Some(f.category.clone()),
         description: "Work".into(),
         billable: None,
         tags: vec![],
@@ -329,7 +329,7 @@ fn validation_rules() {
 
     let other = f.app.create_category("Design").unwrap();
     let mut wrong = interval(&f, "2026-11-02", "09:00", "10:00");
-    wrong.category_id = other.id;
+    wrong.category_id = Some(other.id);
     assert_eq!(code(&mut f, wrong), "category_not_enabled");
 
     f.app
@@ -590,4 +590,50 @@ fn search_filters_and_totals() {
         },
     );
     assert_eq!(by_client.pieces.len(), 2);
+}
+
+#[test]
+fn category_is_optional_and_can_be_added_or_removed_later() {
+    let mut f = fixture();
+    let mut new = interval(&f, "2026-11-02", "09:00", "10:00");
+    new.category_id = None;
+    let saved = f.app.create_entry(new).unwrap();
+    assert!(entry(&saved.pieces[0]).category_id.is_none());
+    let group = entry(&saved.pieces[0]).group_id;
+
+    // Absent keeps it, a value sets it, null removes it.
+    let set = f
+        .app
+        .dispatch(
+            "update_entry",
+            &serde_json::json!({"group": group, "patch": {"category_id": f.category}}),
+        )
+        .unwrap();
+    assert_eq!(
+        set["pieces"][0]["payload"]["category_id"],
+        f.category.to_string()
+    );
+    let untouched = f
+        .app
+        .dispatch(
+            "update_entry",
+            &serde_json::json!({"group": group, "patch": {"description": "x"}}),
+        )
+        .unwrap();
+    assert_eq!(
+        untouched["pieces"][0]["payload"]["category_id"],
+        f.category.to_string()
+    );
+    let cleared = f
+        .app
+        .dispatch(
+            "update_entry",
+            &serde_json::json!({"group": group, "patch": {"category_id": null}}),
+        )
+        .unwrap();
+    assert!(cleared["pieces"][0]["payload"]["category_id"].is_null());
+
+    // Entries without a category appear last in the summary.
+    let nov = f.app.monthly_summary("2026-11").unwrap();
+    assert!(nov.text.contains("Uncategorized — 1:00"));
 }

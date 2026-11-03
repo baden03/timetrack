@@ -33,7 +33,7 @@ export interface Settings {
 }
 export interface TimeEntry {
   project_id: Id;
-  category_id: Id;
+  category_id: Id | null;
   description: string;
   billable: boolean;
   tags: string[];
@@ -61,7 +61,7 @@ export type Timing =
 
 export interface NewEntry {
   project_id: Id;
-  category_id: Id;
+  category_id?: Id | null;
   description: string;
   billable?: boolean;
   tags: string[];
@@ -69,7 +69,8 @@ export interface NewEntry {
 }
 export interface EntryPatch {
   project_id?: Id;
-  category_id?: Id;
+  /** Absent: unchanged. null: remove the category. */
+  category_id?: Id | null;
   description?: string;
   billable?: boolean;
   tags?: string[];
@@ -80,11 +81,14 @@ export interface Suggestion { start: string | null; category_id: Id | null }
 
 export interface Timer {
   project_id: Id;
-  category_id: Id;
+  category_id: Id | null;
   description: string;
   billable: boolean | null;
   tags: string[];
+  /** The start to the minute (what the entry will use). */
   start_at: string;
+  /** When the timer actually started; the elapsed display counts from here. */
+  exact_start_at?: string | null;
   timezone: string;
 }
 export interface TimerState { timer: Rec<Timer> | null; stale: boolean }
@@ -106,6 +110,19 @@ export interface HistoryEntry {
   at: string;
   before: Record<string, unknown> | null;
   after: Record<string, unknown> | null;
+}
+
+export interface ProjectCard {
+  project: Rec<Project>;
+  client_name: string;
+  last_activity: string;
+  running: boolean;
+}
+export interface ProjectOverview {
+  today_minutes: number;
+  week_minutes: number;
+  month_minutes: number;
+  total_minutes: number;
 }
 
 export class CommandError extends Error {

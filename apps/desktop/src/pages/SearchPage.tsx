@@ -2,12 +2,16 @@ import { useState } from "react";
 import { call, type SearchQuery, type SearchResult } from "../api";
 import type { Data } from "../App";
 import { ErrorLine, errorText } from "../components/Errors";
-import { t } from "../i18n";
-import { displayDate, displayTime, formatHhmm } from "../time";
+import { t, tError } from "../i18n";
+import { DateInput } from "../components/FormatInputs";
+import { displayDate, displayTime, formatHhmm, parseDate } from "../time";
 
 export function SearchPage({ data }: { data: Data }) {
   const s = data.state.settings.payload;
   const [q, setQ] = useState<SearchQuery>({});
+  // Dates are kept as typed and read when the search runs.
+  const [fromText, setFromText] = useState("");
+  const [toText, setToText] = useState("");
   const [billable, setBillable] = useState("");
   const [result, setResult] = useState<SearchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -16,8 +20,13 @@ export function SearchPage({ data }: { data: Data }) {
 
   const run = async () => {
     try {
+      const from = fromText.trim() === "" ? undefined : parseDate(fromText, s.date_format);
+      const to = toText.trim() === "" ? undefined : parseDate(toText, s.date_format);
+      if (from === null || to === null) return setError(tError("invalid_date_time"));
       const query: SearchQuery = {
         ...q,
+        from,
+        to,
         billable: billable === "" ? undefined : billable === "yes",
       };
       setResult(await call<SearchResult>("search_entries", { query }));
@@ -87,11 +96,11 @@ export function SearchPage({ data }: { data: Data }) {
           </label>
           <label>
             {t("ui.search.from")}
-            <input type="date" value={q.from ?? ""} onChange={(e) => set({ from: clean(e.target.value) })} />
+            <DateInput value={fromText} format={s.date_format} onChange={setFromText} />
           </label>
           <label>
             {t("ui.search.to")}
-            <input type="date" value={q.to ?? ""} onChange={(e) => set({ to: clean(e.target.value) })} />
+            <DateInput value={toText} format={s.date_format} onChange={setToText} />
           </label>
           <button type="submit">{t("ui.search.run")}</button>
         </div>
@@ -131,7 +140,7 @@ export function SearchPage({ data }: { data: Data }) {
                       <td>
                         {name(data.clients, project?.payload.client_id ?? "")} / {project?.payload.name}
                       </td>
-                      <td>{name(data.categories, e.category_id)}</td>
+                      <td>{name(data.categories, e.category_id ?? "")}</td>
                       <td>{e.description}</td>
                       <td>{e.tags.join(", ")}</td>
                     </tr>

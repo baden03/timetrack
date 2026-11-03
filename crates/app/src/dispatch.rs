@@ -99,6 +99,8 @@ impl<S: Store> App<S> {
             "stop_timer" => out(self.stop_timer(arg::<StopTimer>(args, "stop")?)?),
             "discard_timer" => out(self.discard_timer()?),
             "search_entries" => out(self.search_entries(&arg::<SearchQuery>(args, "query")?)?),
+            "dashboard" => out(self.dashboard()?),
+            "project_overview" => out(self.project_overview(&arg::<Id>(args, "project_id")?)?),
             "monthly_summary" => out(self.monthly_summary(&arg::<String>(args, "month")?)?),
             "history" => out(self.history(&arg::<Id>(args, "id")?)?),
             _ => Err(AppError::UnknownCommand),

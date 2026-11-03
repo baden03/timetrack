@@ -175,5 +175,21 @@
   "ui.field.end_offset": "End offset",
   "ui.field.kind": "Kind",
   "ui.field.timezone": "Time zone",
-  "ui.field.group_id": "Group"
+  "ui.field.group_id": "Group",
+  "error.timer_too_short": "The timer has run for less than a minute. Keep it running, or discard it.",
+  "ui.ok": "OK",
+  "ui.format.date_hint": "Enter the date as {format}",
+  "ui.format.time_hint": "Enter a time such as 21:30",
+  "summary.uncategorized": "Uncategorized",
+  "ui.nav.dashboard": "Dashboard",
+  "ui.dashboard.title": "Dashboard",
+  "ui.dashboard.empty": "No projects yet. Add a client and a project under Setup.",
+  "ui.dashboard.running": "Timer running",
+  "ui.dashboard.last": "Last used {date}",
+  "ui.dashboard.timer_busy": "A timer is already running",
+  "ui.project.today": "Today",
+  "ui.project.week": "This week",
+  "ui.project.month": "This month",
+  "ui.project.total": "All time",
+  "ui.entries.no_category": "No category"
 }

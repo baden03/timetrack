@@ -38,7 +38,8 @@ pub enum Timing {
 #[derive(Debug, Clone, Deserialize)]
 pub struct NewEntry {
     pub project_id: Id,
-    pub category_id: Id,
+    #[serde(default)]
+    pub category_id: Option<Id>,
     pub description: String,
     /// Defaults from the project.
     pub billable: Option<bool>,
@@ -52,7 +53,9 @@ pub struct NewEntry {
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct EntryPatch {
     pub project_id: Option<Id>,
-    pub category_id: Option<Id>,
+    /// Absent: unchanged. `null`: remove the category.
+    #[serde(default, deserialize_with = "double_option")]
+    pub category_id: Option<Option<Id>>,
     pub description: Option<String>,
     pub billable: Option<bool>,
     pub tags: Option<Vec<String>>,
@@ -103,7 +106,7 @@ impl<S: Store> App<S> {
     pub fn create_entry(&mut self, new: NewEntry) -> Result<SavedEntry> {
         let description = require_description(&new.description)?;
         let tags = normalize_tags(&new.tags)?;
-        let (project, _) = self.check_refs(&new.project_id, &new.category_id)?;
+        let project = self.check_refs(&new.project_id, new.category_id.as_ref())?;
         let zone_name = match new.timezone {
             Some(z) => z,
             None => self.settings_value()?.timezone,
@@ -154,7 +157,7 @@ impl<S: Store> App<S> {
                 .category_id
                 .clone()
                 .unwrap_or(first.category_id.clone());
-            self.check_refs(&project_id, &category_id)?;
+            self.check_refs(&project_id, category_id.as_ref())?;
             base.project_id = project_id;
             base.category_id = category_id;
         }
@@ -264,7 +267,7 @@ impl<S: Store> App<S> {
             let e: TimeEntry = payload(&rec)?;
             if e.project_id == *project_id && newest.as_ref().is_none_or(|n| rec.id > *n) {
                 newest = Some(rec.id.clone());
-                category_id = Some(e.category_id);
+                category_id = e.category_id;
             }
         }
         Ok(Suggestion { start, category_id })
@@ -332,23 +335,23 @@ impl<S: Store> App<S> {
         Ok(keyed.into_iter().map(|(_, r)| r).collect())
     }
 
-    pub(crate) fn check_refs(
-        &self,
-        project_id: &Id,
-        category_id: &Id,
-    ) -> Result<(Project, Category)> {
+    /// The project must be active; a category, if given, must be active and
+    /// enabled for the project.
+    pub(crate) fn check_refs(&self, project_id: &Id, category_id: Option<&Id>) -> Result<Project> {
         let project: Project = payload(&self.load(project_id, KIND_PROJECT)?)?;
         if project.status == Status::Archived {
             return Err(AppError::ProjectArchived);
         }
-        let category: Category = payload(&self.load(category_id, KIND_CATEGORY)?)?;
-        if category.status == Status::Archived {
-            return Err(AppError::CategoryArchived);
+        if let Some(category_id) = category_id {
+            let category: Category = payload(&self.load(category_id, KIND_CATEGORY)?)?;
+            if category.status == Status::Archived {
+                return Err(AppError::CategoryArchived);
+            }
+            if !project.category_ids.contains(category_id) {
+                return Err(AppError::CategoryNotEnabled);
+            }
         }
-        if !project.category_ids.contains(category_id) {
-            return Err(AppError::CategoryNotEnabled);
-        }
-        Ok((project, category))
+        Ok(project)
     }
 
     fn resolve(&self, timing: &Timing, zone: Tz) -> Result<Vec<Spec>> {
@@ -456,4 +459,13 @@ fn piece(base: &TimeEntry, spec: &Spec, index: usize, count: usize) -> TimeEntry
 
 pub(crate) fn kind_of_interval() -> EntryKind {
     EntryKind::Interval
+}
+
+/// Distinguishes a missing field (`None`) from an explicit `null` (`Some(None)`).
+pub(crate) fn double_option<'de, D, T>(d: D) -> std::result::Result<Option<Option<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Ok(Some(Option::deserialize(d)?))
 }

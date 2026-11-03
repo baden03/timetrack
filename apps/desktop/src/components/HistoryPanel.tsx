@@ -3,6 +3,7 @@ import { call, type HistoryEntry, type Id } from "../api";
 import type { Data } from "../App";
 import { ErrorLine, errorText } from "./Errors";
 import { t } from "../i18n";
+import { displayDate, displayTime } from "../time";
 
 /** Before and after values of every change to one stored record. */
 export function HistoryPanel({ data, id }: { data: Data; id: Id }) {
@@ -15,12 +16,10 @@ export function HistoryPanel({ data, id }: { data: Data; id: Id }) {
   }, [id]);
 
   const settings = data.state.settings.payload;
-  const stamp = (instant: string) =>
-    new Intl.DateTimeFormat(settings.clock_24h ? "en-GB" : "en-US", {
-      timeZone: settings.timezone,
-      dateStyle: "short",
-      timeStyle: "medium",
-    }).format(new Date(instant));
+  const stamp = (instant: string) => {
+    const day = new Intl.DateTimeFormat("en-CA", { timeZone: settings.timezone }).format(new Date(instant));
+    return `${displayDate(day, settings.date_format)} ${displayTime(instant, settings.timezone, settings.clock_24h)}`;
+  };
   const label = (field: string) => {
     const key = `ui.field.${field}`;
     const text = t(key);

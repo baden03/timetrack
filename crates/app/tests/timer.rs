@@ -55,7 +55,7 @@ fn start(s: &mut Setup) -> timetrack_core::record::Record {
     s.app
         .start_timer(StartTimer {
             project_id: s.project.clone(),
-            category_id: s.category.clone(),
+            category_id: Some(s.category.clone()),
             description: String::new(),
             tags: vec![],
             billable: None,
@@ -68,6 +68,7 @@ fn stop(description: &str, end_time: Option<&str>) -> StopTimer {
         description: description.into(),
         end_time: end_time.map(Into::into),
         tags: None,
+        category_id: None,
     }
 }
 
@@ -84,7 +85,7 @@ fn start_is_to_the_minute_and_only_one_runs() {
     assert!(state.timer.is_some() && !state.stale);
     let again = s.app.start_timer(StartTimer {
         project_id: s.project.clone(),
-        category_id: s.category.clone(),
+        category_id: Some(s.category.clone()),
         description: String::new(),
         tags: vec![],
         billable: None,
@@ -148,7 +149,7 @@ fn timer_survives_a_restart() {
             .unwrap();
         app.start_timer(StartTimer {
             project_id: project.id.clone(),
-            category_id: category.id.clone(),
+            category_id: Some(category.id.clone()),
             description: "draft".into(),
             tags: vec![],
             billable: None,
@@ -218,9 +219,12 @@ fn stopping_in_the_same_minute_is_refused_and_keeps_the_timer() {
     advance(&s, "2026-11-03T09:00:50Z");
     assert_eq!(
         s.app.stop_timer(stop("x", None)).unwrap_err().code(),
-        "end_not_after_start"
+        "timer_too_short"
     );
     assert!(s.app.timer_state().unwrap().timer.is_some());
+    // It can still be discarded.
+    s.app.discard_timer().unwrap();
+    assert!(s.app.timer_state().unwrap().timer.is_none());
 }
 
 #[test]
@@ -233,7 +237,7 @@ fn quick_start_repeats_the_most_recent_project_and_category() {
     s.app
         .create_entry(timetrack_app::NewEntry {
             project_id: s.project.clone(),
-            category_id: s.category.clone(),
+            category_id: Some(s.category.clone()),
             description: "earlier".into(),
             billable: Some(false),
             tags: vec![],
@@ -247,4 +251,140 @@ fn quick_start_repeats_the_most_recent_project_and_category() {
     let rec = s.app.quick_start_timer().unwrap();
     assert_eq!(rec.payload["project_id"], s.project.to_string());
     assert_eq!(rec.payload["billable"], false);
+}
+
+#[test]
+fn a_timer_can_start_without_a_category_and_get_one_at_stop() {
+    let mut s = setup("2026-11-03T09:00:00Z");
+    s.app
+        .start_timer(StartTimer {
+            project_id: s.project.clone(),
+            category_id: None,
+            description: String::new(),
+            tags: vec![],
+            billable: None,
+        })
+        .unwrap();
+    advance(&s, "2026-11-03T10:00:00Z");
+    let mut stop_with = stop("Chosen at stop", None);
+    stop_with.category_id = Some(Some(s.category.clone()));
+    let saved = s.app.stop_timer(stop_with).unwrap();
+    assert_eq!(
+        saved.pieces[0].payload["category_id"],
+        s.category.to_string()
+    );
+
+    // And with no category at all.
+    s.app
+        .start_timer(StartTimer {
+            project_id: s.project.clone(),
+            category_id: None,
+            description: String::new(),
+            tags: vec![],
+            billable: None,
+        })
+        .unwrap();
+    advance(&s, "2026-11-03T11:00:00Z");
+    let saved = s.app.stop_timer(stop("No category", None)).unwrap();
+    assert!(saved.pieces[0].payload["category_id"].is_null());
+}
+
+fn entry_on(s: &mut Setup, project: &Id, date: &str, start: &str, end: &str) {
+    s.app
+        .create_entry(timetrack_app::NewEntry {
+            project_id: project.clone(),
+            category_id: None,
+            description: "work".into(),
+            billable: None,
+            tags: vec![],
+            timing: timetrack_app::Timing::Interval {
+                date: date.into(),
+                start: start.into(),
+                end: end.into(),
+            },
+            timezone: None,
+        })
+        .unwrap();
+}
+
+#[test]
+fn dashboard_orders_projects_by_recent_use_and_overview_totals() {
+    let mut s = setup("2026-11-03T09:00:00Z"); // a Tuesday
+    let client = s.app.list("client", false).unwrap().remove(0);
+    advance(&s, "2026-11-03T09:05:00Z");
+    let second = s
+        .app
+        .create_project(ProjectInput {
+            client_id: client.id.clone(),
+            name: "Blog".into(),
+            description: String::new(),
+            billable_default: true,
+            category_ids: vec![],
+        })
+        .unwrap();
+    let names = |s: &Setup| -> Vec<String> {
+        s.app
+            .dashboard()
+            .unwrap()
+            .iter()
+            .map(|c| c.project.payload["name"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    // A new project is the most recent until time is recorded on the older one.
+    assert_eq!(names(&s), ["Blog", "Website"]);
+    advance(&s, "2026-11-03T12:00:00Z");
+    let website = s.project.clone();
+    entry_on(&mut s, &website, "2026-11-03", "09:00", "10:30");
+    assert_eq!(names(&s), ["Website", "Blog"]);
+    assert_eq!(s.app.dashboard().unwrap()[0].client_name, "Acme");
+
+    // A running timer puts its project first.
+    advance(&s, "2026-11-03T12:30:00Z");
+    s.app
+        .start_timer(StartTimer {
+            project_id: second.id.clone(),
+            category_id: None,
+            description: String::new(),
+            tags: vec![],
+            billable: None,
+        })
+        .unwrap();
+    let cards = s.app.dashboard().unwrap();
+    assert!(cards[0].running && cards[0].project.id == second.id);
+    s.app.discard_timer().unwrap();
+
+    // Archived projects are not shown.
+    s.app
+        .set_project_status(&second.id, timetrack_core::model::Status::Archived)
+        .unwrap();
+    assert_eq!(names(&s), ["Website"]);
+
+    // Today (Tue 3 Nov), this week, this month, all time.
+    entry_on(&mut s, &website, "2026-11-02", "09:00", "10:00"); // Monday: 60
+    entry_on(&mut s, &website, "2026-11-01", "09:00", "10:00"); // Sunday of last week: 60
+    entry_on(&mut s, &website, "2026-10-05", "09:00", "11:00"); // October: 120
+    let o = s.app.project_overview(&website).unwrap();
+    assert_eq!(
+        (
+            o.today_minutes,
+            o.week_minutes,
+            o.month_minutes,
+            o.total_minutes
+        ),
+        (90, 150, 210, 330)
+    );
+    assert_eq!(s.app.project_overview(&second.id).unwrap().total_minutes, 0);
+}
+
+#[test]
+fn the_display_start_is_exact_while_the_entry_start_is_to_the_minute() {
+    let mut s = setup("2026-11-03T09:00:42Z");
+    let rec = start(&mut s);
+    assert_eq!(rec.payload["start_at"], "2026-11-03T09:00:00Z");
+    assert_eq!(rec.payload["exact_start_at"], "2026-11-03T09:00:42Z");
+    // A timer stored before this field existed still loads.
+    let mut old = rec.payload.clone();
+    old.as_object_mut().unwrap().remove("exact_start_at");
+    let parsed: timetrack_core::model::Timer = serde_json::from_value(old).unwrap();
+    assert!(parsed.exact_start_at.is_none());
 }
