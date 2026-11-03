@@ -6,6 +6,7 @@
 **Background:** [docs/timetrack_architecture_decisions_2026-11-02.md](docs/timetrack_architecture_decisions_2026-11-02.md) records the brainstorming this concept builds on. Where the two differ, this document is current.
 **Architecture direction:** [docs/architecture.md](docs/architecture.md) (shared Rust domain core, separate desktop and hub applications).
 **Rollout plan:** [docs/plan.md](docs/plan.md) (phases, release scope and acceptance criteria). Where it moves a feature to a later release, the plan is current.
+**Quick start:** [docs/quick-start.md](docs/quick-start.md) walks a new user through installing TimeTrack and recording the first hours.
 **Translating:** [docs/translating.md](docs/translating.md) explains how to add the interface in another language.
 **Also archived:** the 2024 prototype reconstruction, [docs/brief-v1.md](docs/brief-v1.md).
 
