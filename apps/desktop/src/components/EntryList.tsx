@@ -8,7 +8,7 @@ import { colorOf } from "../colors";
 import { useDialogs } from "./Dialogs";
 import { ColorDot } from "./Color";
 import { DescriptionText } from "./DescriptionText";
-import { DateInput, TimeInput } from "./FormatInputs";
+import { DateInput, DurationInput, TimeInput } from "./FormatInputs";
 import {
   addDays,
   clockIn,
@@ -18,7 +18,7 @@ import {
   formatHhmm,
   parseClock,
   parseDate,
-  parseHhmm,
+  parseDuration,
   weekStart,
 } from "../time";
 
@@ -97,7 +97,7 @@ export function EntryList({
                 <tr>
                   <th scope="col">{t("ui.entries.from")}</th>
                   <th scope="col">{t("ui.entries.to")}</th>
-                  <th scope="col">{t("ui.entries.duration")}</th>
+                  <th scope="col">{t("ui.entries.time_column")}</th>
                   {!hideProject && <th scope="col">{t("ui.entries.project")}</th>}
                   <th scope="col">{t("ui.entries.category")}</th>
                   <th scope="col">{t("ui.entries.description")}</th>
@@ -275,7 +275,7 @@ function EditRow({
       if (from === null || to === null) return setError(tError("invalid_date_time"));
       timing = { mode: "interval", date: iso, start: from, end: to };
     } else {
-      const minutes = parseHhmm(duration);
+      const minutes = parseDuration(duration);
       if (minutes === null) return setError(t("error.duration_out_of_range"));
       timing = { mode: "duration", date: iso, minutes };
     }
@@ -327,7 +327,7 @@ function EditRow({
           ) : (
             <label>
               {t("ui.entries.duration")}
-              <input value={duration} onChange={(x) => setDuration(x.target.value)} />
+              <DurationInput value={duration} onChange={setDuration} />
             </label>
           )}
           <label>

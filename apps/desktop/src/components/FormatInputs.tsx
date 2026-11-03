@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { t } from "../i18n";
-import { displayDate, formatClock, parseClock, parseDate } from "../time";
+import { displayDate, formatClock, formatHhmm, parseClock, parseDate, parseDuration } from "../time";
 
 /*
  * Date and time fields. While the person types, the text is left alone.
@@ -68,6 +68,21 @@ export function DateInput({ format, ...props }: Common & { format: string }) {
       tidy={(text) => {
         const iso = parseDate(text, format);
         return iso === null ? null : displayDate(iso, format);
+      }}
+    />
+  );
+}
+
+/** A duration field: `:45`, `.75` or `1h30` are tidied into `0:45`, `0:45`, `1:30` on blur. */
+export function DurationInput(props: Common) {
+  return (
+    <TextField
+      {...props}
+      placeholder="1:30"
+      hint={t("ui.format.duration_hint")}
+      tidy={(text) => {
+        const minutes = parseDuration(text);
+        return minutes === null ? null : formatHhmm(minutes);
       }}
     />
   );

@@ -251,5 +251,10 @@
   "color.pink": "Pink",
   "color.brown": "Braun",
   "color.gray": "Grau",
-  "ui.entries.tags_label": "Tags"
+  "ui.entries.tags_label": "Tags",
+  "ui.format.duration_hint": "Gib eine Dauer wie 1:30, :45 oder ,75 ein",
+  "ui.entries.lines": "Beschreibungszeilen",
+  "ui.entries.remove_line": "Zeile entfernen: {line}",
+  "ui.entries.lines_hint": "Mit der Eingabetaste fügst du eine weitere Zeile hinzu. Die Eingabetaste in einer leeren Zeile speichert den Eintrag.",
+  "ui.entries.time_column": "Zeit"
 }

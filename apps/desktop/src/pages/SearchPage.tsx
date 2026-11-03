@@ -124,7 +124,7 @@ export function SearchPage({ data }: { data: Data }) {
                 <tr>
                   <th>{t("ui.entries.date")}</th>
                   <th>{t("ui.entries.from")}</th>
-                  <th>{t("ui.entries.duration")}</th>
+                  <th>{t("ui.entries.time_column")}</th>
                   <th>{t("ui.entries.project")}</th>
                   <th>{t("ui.entries.category")}</th>
                   <th>{t("ui.entries.description")}</th>

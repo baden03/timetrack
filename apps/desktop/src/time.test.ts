@@ -6,6 +6,7 @@ import {
   formatElapsed,
   formatHhmm,
   parseClock,
+  parseDuration,
   parseDate,
   parseHhmm,
   weekStart,
@@ -72,5 +73,35 @@ describe("durations and weeks", () => {
     expect(formatElapsed(3_725_000)).toBe("1:02:05");
     expect(formatElapsed(27 * 3600 * 1000)).toBe("27:00:00");
     expect(formatElapsed(-1000)).toBe("0:00:00");
+  });
+});
+
+describe("durations as typed", () => {
+  it.each([
+    [":45", 45],
+    [".75", 45],
+    ["0.75", 45],
+    ["1.5", 90],
+    ["1,5", 90],
+    ["1:30", 90],
+    ["1:5", 65],
+    ["0:45", 45],
+    ["126:30", 7590],
+    ["2", 120],
+    ["24", 1440],
+    ["45", 45],
+    ["90", 90],
+    ["1h30", 90],
+    ["1h 30m", 90],
+    ["2h", 120],
+    ["45m", 45],
+    ["  :15 ", 15],
+    [".25", 15],
+  ])("%s is %i minutes", (text, minutes) => {
+    expect(parseDuration(text)).toBe(minutes);
+  });
+
+  it.each(["", "abc", "1:75", ":", ".", "1:2:3", "h", "1h75", "-5"])("%s is not a duration", (text) => {
+    expect(parseDuration(text)).toBeNull();
   });
 });

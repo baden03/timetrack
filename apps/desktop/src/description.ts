@@ -17,3 +17,13 @@ export function descriptionItems(description: string): string[] {
 export function isBulletList(description: string): boolean {
   return descriptionItems(description).length > 1;
 }
+
+/**
+ * Builds an entry's description from the lines typed one after another: one
+ * line stays as it is, several become bullet points. The same rule is used by
+ * the timer's notes (core/model.rs, `compose_description`).
+ */
+export function composeDescription(lines: string[]): string {
+  const items = lines.map((l) => l.trim()).filter((l) => l !== "");
+  return items.length < 2 ? (items[0] ?? "") : items.map((l) => `- ${l}`).join("\n");
+}
