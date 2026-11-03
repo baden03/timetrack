@@ -1,0 +1,21 @@
+[package]
+name = "timetrack-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+timetrack-core = { path = "../core" }
+timetrack-storage = { path = "../storage" }
+chrono = { version = "0.4", features = ["serde"] }
+chrono-tz = "0.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[dev-dependencies]
+tiny_http = "0.12"

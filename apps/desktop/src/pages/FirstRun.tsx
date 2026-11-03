@@ -1,0 +1,25 @@
+import { useState } from "react";
+import { call } from "../api";
+import { t } from "../i18n";
+
+export function FirstRun({ onDone }: { onDone: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <main className="first-run">
+      <h1>{t("ui.firstrun.title")}</h1>
+      <p>{t("ui.firstrun.body")}</p>
+      <button
+        autoFocus
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          await call("finish_first_run");
+          await onDone();
+        }}
+      >
+        {t("ui.firstrun.standalone")}
+      </button>
+      <p className="muted">{t("ui.firstrun.hub_later")}</p>
+    </main>
+  );
+}
