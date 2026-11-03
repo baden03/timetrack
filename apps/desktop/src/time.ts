@@ -5,6 +5,34 @@ export function formatHhmm(minutes: number): string {
   return `${minutes < 0 ? "-" : ""}${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
 }
 
+/**
+ * Reads a duration as someone would type it, into whole minutes (or null):
+ * `1:30`, `:45` (45 minutes), `1:5` (1:05), `.75` and `1.5` or `1,5` (decimal
+ * hours), `1h30`, `2h`, `45m`, and a bare number: up to 24 is hours, more is
+ * minutes (`2` is 2:00, `45` is 0:45).
+ */
+export function parseDuration(text: string): number | null {
+  const s = text.trim().toLowerCase().replace(",", ".");
+  if (s === "") return null;
+  let m: RegExpExecArray | null;
+  if (/^\d+$/.test(s)) {
+    const n = Number(s);
+    return n <= 24 ? n * 60 : n;
+  }
+  if ((m = /^(\d*):(\d{1,2})$/.exec(s))) {
+    const minutes = Number(m[2]);
+    return minutes > 59 ? null : Number(m[1] || 0) * 60 + minutes;
+  }
+  if ((m = /^(\d*)\.(\d+)$/.exec(s))) {
+    return Math.round(Number(`${m[1] || 0}.${m[2]}`) * 60);
+  }
+  if ((m = /^(?:(\d+)\s*h\s*)?(?:(\d+)\s*(?:m|min)?)?$/.exec(s)) && (m[1] || m[2])) {
+    const minutes = Number(m[2] || 0);
+    return minutes > 59 && m[1] ? null : Number(m[1] || 0) * 60 + minutes;
+  }
+  return null;
+}
+
 /** Parses `h:mm` into minutes, or null if it is not that shape. */
 export function parseHhmm(text: string): number | null {
   const match = /^(\d+):([0-5]\d)$/.exec(text.trim());

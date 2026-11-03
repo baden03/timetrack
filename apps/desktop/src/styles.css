@@ -65,7 +65,19 @@ label { display: flex; flex-direction: column; gap: .15rem; font-size: .85rem; c
 label.check { flex-direction: row; align-items: center; gap: .35rem; color: var(--text); }
 fieldset { border: 1px solid var(--border-strong); border-radius: 6px; margin: 0; }
 input, select, textarea, button { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 6px; padding: .3rem .5rem; }
-textarea { resize: vertical; min-height: 2rem; }
+/* One height for text fields, selects and the buttons beside them, so a row of
+   controls lines up. Checkboxes and radios keep their own size. */
+:root { --control-height: 2rem; }
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+select,
+.row > button,
+form.inline button,
+.timer-bar button,
+.actions button {
+  height: var(--control-height);
+}
+select { padding-block: 0; }
+textarea { resize: vertical; min-height: var(--control-height); }
 button { cursor: pointer; }
 button:disabled { opacity: .5; cursor: default; }
 button.danger { color: var(--danger); }
@@ -166,3 +178,4 @@ ul.bullets { margin: 0; }
 .tags { display: inline-flex; flex-wrap: wrap; gap: .25rem; margin-inline-start: .5rem; vertical-align: baseline; }
 ul.bullets + .tags, .tags:first-child { display: flex; margin-inline-start: 0; margin-block-start: .25rem; }
 .tag { font-size: .75rem; padding: 0 .45rem; border: 1px solid var(--border-strong); border-radius: 999px; color: var(--muted); white-space: nowrap; }
+.small { font-size: .8rem; margin: .1rem 0 0; }

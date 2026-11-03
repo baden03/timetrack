@@ -251,5 +251,10 @@
   "color.pink": "Pink",
   "color.brown": "Brown",
   "color.gray": "Gray",
-  "ui.entries.tags_label": "Tags"
+  "ui.entries.tags_label": "Tags",
+  "ui.format.duration_hint": "Enter a duration such as 1:30, :45 or .75",
+  "ui.entries.lines": "Description lines",
+  "ui.entries.remove_line": "Remove line: {line}",
+  "ui.entries.lines_hint": "Enter adds another line. Enter on an empty line saves the entry.",
+  "ui.entries.time_column": "Time"
 }

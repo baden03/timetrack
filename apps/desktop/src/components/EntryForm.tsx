@@ -3,8 +3,9 @@ import { call, type SavedEntry, type Suggestion, type Timing } from "../api";
 import type { Data } from "../App";
 import { ErrorLine, errorText } from "./Errors";
 import { t, tError } from "../i18n";
-import { displayDate, formatClock, parseClock, parseDate, parseHhmm } from "../time";
-import { DateInput, TimeInput } from "./FormatInputs";
+import { displayDate, formatClock, parseClock, parseDate, parseDuration } from "../time";
+import { composeDescription } from "../description";
+import { DateInput, DurationInput, TimeInput } from "./FormatInputs";
 
 export function EntryForm({
   data,
@@ -32,7 +33,11 @@ export function EntryForm({
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [duration, setDuration] = useState("");
-  const [description, setDescription] = useState("");
+  // The description is typed a line at a time: Enter adds the line to the list,
+  // Enter on an empty line saves the entry. One line stays plain text; several
+  // become bullet points, as with the notes of a running timer.
+  const [lines, setLines] = useState<string[]>([]);
+  const [draft, setDraft] = useState("");
   const [tags, setTags] = useState("");
   const [billable, setBillable] = useState<boolean | null>(null); // null: project default
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +76,7 @@ export function EntryForm({
       if (from === null || to === null) return setError(tError("invalid_date_time"));
       timing = { mode, date, start: from, end: to };
     } else {
-      const minutes = parseHhmm(duration);
+      const minutes = parseDuration(duration);
       if (minutes === null) return setError(t("error.duration_out_of_range"));
       timing = { mode, date, minutes };
     }
@@ -80,7 +85,7 @@ export function EntryForm({
         entry: {
           project_id: projectId,
           category_id: categoryId || null,
-          description,
+          description: composeDescription([...lines, draft]),
           billable: billable ?? undefined,
           tags: tags.split(",").map((x) => x.trim()).filter(Boolean),
           timing,
@@ -88,7 +93,8 @@ export function EntryForm({
       });
       setError(null);
       setWarning(saved.overlaps.length > 0 ? t("ui.entries.overlap") : null);
-      setDescription("");
+      setLines([]);
+      setDraft("");
       setTags("");
       setEnd("");
       setDuration("");
@@ -143,17 +149,13 @@ export function EntryForm({
           {t("ui.entries.date")}
           <DateInput value={dateText} format={settings.date_format} onChange={setDateText} />
         </label>
-        <fieldset className="modes">
-          <legend>{t("ui.entries.mode")}</legend>
-          <label className="check">
-            <input type="radio" name="entry-mode" checked={mode === "interval"} onChange={() => setMode("interval")} />
-            {t("ui.entries.mode_interval")}
-          </label>
-          <label className="check">
-            <input type="radio" name="entry-mode" checked={mode === "duration"} onChange={() => setMode("duration")} />
-            {t("ui.entries.mode_duration")}
-          </label>
-        </fieldset>
+        <label>
+          {t("ui.entries.mode")}
+          <select value={mode} onChange={(e) => setMode(e.target.value as "interval" | "duration")}>
+            <option value="interval">{t("ui.entries.mode_interval")}</option>
+            <option value="duration">{t("ui.entries.mode_duration")}</option>
+          </select>
+        </label>
         {mode === "interval" ? (
           <>
             <label>
@@ -168,25 +170,27 @@ export function EntryForm({
         ) : (
           <label>
             {t("ui.entries.duration")}
-            <input
-              placeholder="1:30"
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-            />
+            <DurationInput value={duration} onChange={setDuration} />
           </label>
         )}
       </div>
       <div className="row">
         <label className="grow">
           {t("ui.entries.description")}
-          <textarea
-            rows={1}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
+          <input
+            value={draft}
+            aria-describedby={lines.length > 0 ? "lines-hint" : undefined}
+            onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              if (e.metaKey || e.ctrlKey || (draft.trim() === "" && lines.length > 0)) {
                 void submit();
+              } else if (draft.trim() !== "") {
+                setLines([...lines, draft.trim()]);
+                setDraft("");
+              } else {
+                void submit(); // nothing typed at all: the form says what is missing
               }
             }}
           />
@@ -205,6 +209,28 @@ export function EntryForm({
         </label>
         <button type="submit">{t("ui.entries.add")}</button>
       </div>
+      {lines.length > 0 && (
+        <>
+          <ul className="notes" aria-label={t("ui.entries.lines")}>
+            {lines.map((line, i) => (
+              <li key={`${i}-${line}`}>
+                <span>{line}</span>
+                <button
+                  type="button"
+                  className="link"
+                  aria-label={t("ui.entries.remove_line", { line })}
+                  onClick={() => setLines(lines.filter((_, n) => n !== i))}
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p id="lines-hint" className="muted small">
+            {t("ui.entries.lines_hint")}
+          </p>
+        </>
+      )}
     </form>
   );
 }
