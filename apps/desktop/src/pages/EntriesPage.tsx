@@ -7,11 +7,12 @@ import { ErrorLine, errorText } from "../components/Errors";
 import { t } from "../i18n";
 import { addDays, todayIn } from "../time";
 
-export function EntriesPage({ data }: { data: Data }) {
+export function EntriesPage({ data, version }: { data: Data; version: number }) {
   const settings = data.state.settings.payload;
   const [windowDays, setWindowDays] = useState(settings.entry_window_days);
   const [entries, setEntries] = useState<Rec<TimeEntry>[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<"day" | "week">("day");
   const today = todayIn(settings.timezone);
 
   const load = useCallback(async () => {
@@ -22,7 +23,7 @@ export function EntriesPage({ data }: { data: Data }) {
     } catch (e) {
       setError(errorText(e));
     }
-  }, [today, windowDays]);
+  }, [today, windowDays, version]);
 
   useEffect(() => {
     void load();
@@ -33,7 +34,17 @@ export function EntriesPage({ data }: { data: Data }) {
       <h1>{t("ui.entries.title")}</h1>
       <ErrorLine message={error} />
       <EntryForm data={data} today={today} onSaved={load} />
-      <EntryList data={data} entries={entries} onChanged={load} />
+      <div className="row">
+        <label className="check">
+          <input type="radio" checked={view === "day"} onChange={() => setView("day")} />
+          {t("ui.entries.view_day")}
+        </label>
+        <label className="check">
+          <input type="radio" checked={view === "week"} onChange={() => setView("week")} />
+          {t("ui.entries.view_week")}
+        </label>
+      </div>
+      <EntryList data={data} entries={entries} view={view} onChanged={load} />
       <button className="link" onClick={() => setWindowDays(windowDays + settings.entry_window_days)}>
         {t("ui.entries.older", { days: windowDays })}
       </button>

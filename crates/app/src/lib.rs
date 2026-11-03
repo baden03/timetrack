@@ -5,10 +5,14 @@
 mod dispatch;
 mod entries;
 mod error;
+mod search;
 mod service;
 mod summary;
+mod timer;
 
 pub use entries::{EntryPatch, NewEntry, SavedEntry, Suggestion, Timing};
 pub use error::{AppError, Result};
+pub use search::{SearchQuery, SearchResult};
 pub use service::{system_clock, App, AppState, Clock, Identity, ProjectInput};
 pub use summary::MonthlySummary;
+pub use timer::{StartTimer, StopTimer, TimerState};

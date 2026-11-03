@@ -77,14 +77,14 @@ pub struct Suggestion {
     pub category_id: Option<Id>,
 }
 
-struct Spec {
-    work_date: NaiveDate,
-    minutes: i64,
-    start_at: Option<DateTime<Utc>>,
-    end_at: Option<DateTime<Utc>>,
-    start_offset: Option<i32>,
-    end_offset: Option<i32>,
-    span: Option<(DateTime<Utc>, DateTime<Utc>)>,
+pub(crate) struct Spec {
+    pub(crate) work_date: NaiveDate,
+    pub(crate) minutes: i64,
+    pub(crate) start_at: Option<DateTime<Utc>>,
+    pub(crate) end_at: Option<DateTime<Utc>>,
+    pub(crate) start_offset: Option<i32>,
+    pub(crate) end_offset: Option<i32>,
+    pub(crate) span: Option<(DateTime<Utc>, DateTime<Utc>)>,
 }
 
 fn parse_date(text: &str) -> Result<NaiveDate> {
@@ -112,7 +112,6 @@ impl<S: Store> App<S> {
         let specs = self.resolve(&new.timing, zone)?;
         let overlaps = self.find_overlaps(&specs, None)?;
 
-        let group = self.ids.next_id().to_string();
         let base = TimeEntry {
             project_id: new.project_id,
             category_id: new.category_id,
@@ -127,23 +126,13 @@ impl<S: Store> App<S> {
             end_at: None,
             start_offset: None,
             end_offset: None,
-            group_id: group,
+            group_id: String::new(),
             piece_index: 0,
             piece_count: 0,
             span_start_at: None,
             span_end_at: None,
         };
-        let mut changes = Vec::new();
-        for (i, spec) in specs.iter().enumerate() {
-            let entry = piece(&base, spec, i, specs.len());
-            changes.push(Record::create(
-                &self.ids,
-                KIND_ENTRY,
-                to_value(&entry),
-                self.actor.clone(),
-                self.now(),
-            ));
-        }
+        let changes = self.create_pieces(base, &specs);
         self.store.put_many(&changes)?;
         Ok(SavedEntry {
             pieces: changes.into_iter().map(|(r, _)| r).collect(),
@@ -283,6 +272,52 @@ impl<S: Store> App<S> {
 
     // ---- internals ------------------------------------------------------
 
+    /// Builds the new records for the pieces of one entry without storing them.
+    pub(crate) fn create_pieces(
+        &self,
+        mut base: TimeEntry,
+        specs: &[Spec],
+    ) -> Vec<(Record, timetrack_core::record::HistoryEntry)> {
+        base.group_id = self.ids.next_id().to_string();
+        specs
+            .iter()
+            .enumerate()
+            .map(|(i, spec)| {
+                Record::create(
+                    &self.ids,
+                    KIND_ENTRY,
+                    to_value(&piece(&base, spec, i, specs.len())),
+                    self.actor.clone(),
+                    self.now(),
+                )
+            })
+            .collect()
+    }
+
+    /// Splits an interval given as instants, validating it like any entry.
+    pub(crate) fn specs_from_instants(
+        &self,
+        start_at: DateTime<Utc>,
+        end_at: DateTime<Utc>,
+        zone: Tz,
+    ) -> Result<Vec<Spec>> {
+        validate_interval(start_at, end_at, self.now())?;
+        let pieces = split_at_midnight(start_at, end_at, zone)?;
+        check_split_group(&pieces)?;
+        Ok(pieces
+            .into_iter()
+            .map(|p| Spec {
+                work_date: p.work_date,
+                minutes: p.minutes,
+                start_at: Some(p.start_at),
+                end_at: Some(p.end_at),
+                start_offset: Some(p.start_offset),
+                end_offset: Some(p.end_offset),
+                span: Some((p.span_start_at, p.span_end_at)),
+            })
+            .collect())
+    }
+
     fn group(&self, group: &str) -> Result<Vec<Record>> {
         let mut pieces = self.store.list_by_group(KIND_ENTRY, group)?;
         if pieces.is_empty() {
@@ -297,7 +332,11 @@ impl<S: Store> App<S> {
         Ok(keyed.into_iter().map(|(_, r)| r).collect())
     }
 
-    fn check_refs(&self, project_id: &Id, category_id: &Id) -> Result<(Project, Category)> {
+    pub(crate) fn check_refs(
+        &self,
+        project_id: &Id,
+        category_id: &Id,
+    ) -> Result<(Project, Category)> {
         let project: Project = payload(&self.load(project_id, KIND_PROJECT)?)?;
         if project.status == Status::Archived {
             return Err(AppError::ProjectArchived);
@@ -329,21 +368,7 @@ impl<S: Store> App<S> {
                 };
                 let start_at = local_to_utc(day.and_time(start_t), zone)?;
                 let end_at = local_to_utc(end_day.and_time(end_t), zone)?;
-                validate_interval(start_at, end_at, now)?;
-                let pieces = split_at_midnight(start_at, end_at, zone)?;
-                check_split_group(&pieces)?;
-                Ok(pieces
-                    .into_iter()
-                    .map(|p| Spec {
-                        work_date: p.work_date,
-                        minutes: p.minutes,
-                        start_at: Some(p.start_at),
-                        end_at: Some(p.end_at),
-                        start_offset: Some(p.start_offset),
-                        end_offset: Some(p.end_offset),
-                        span: Some((p.span_start_at, p.span_end_at)),
-                    })
-                    .collect())
+                self.specs_from_instants(start_at, end_at, zone)
             }
             Timing::Duration { date, minutes } => {
                 let day = parse_date(date)?;
@@ -366,7 +391,11 @@ impl<S: Store> App<S> {
 
     /// Groups of other entries whose intervals overlap these pieces, judged
     /// on instants. Duration-only entries never take part.
-    fn find_overlaps(&self, specs: &[Spec], own_group: Option<&str>) -> Result<Vec<String>> {
+    pub(crate) fn find_overlaps(
+        &self,
+        specs: &[Spec],
+        own_group: Option<&str>,
+    ) -> Result<Vec<String>> {
         let (Some(first), Some(last)) = (specs.first(), specs.last()) else {
             return Ok(vec![]);
         };
@@ -399,7 +428,7 @@ impl<S: Store> App<S> {
     }
 }
 
-fn kind_of(timing: &Timing) -> EntryKind {
+pub(crate) fn kind_of(timing: &Timing) -> EntryKind {
     match timing {
         Timing::Interval { .. } => EntryKind::Interval,
         Timing::Duration { .. } => EntryKind::Duration,
@@ -423,4 +452,8 @@ fn piece(base: &TimeEntry, spec: &Spec, index: usize, count: usize) -> TimeEntry
         span_end_at: spec.span.map(|s| s.1),
         ..base.clone()
     }
+}
+
+pub(crate) fn kind_of_interval() -> EntryKind {
+    EntryKind::Interval
 }

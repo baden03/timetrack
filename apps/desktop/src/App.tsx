@@ -11,6 +11,8 @@ import { tError, t } from "./i18n";
 import { CommandError } from "./api";
 import { EntriesPage } from "./pages/EntriesPage";
 import { FirstRun } from "./pages/FirstRun";
+import { SearchPage } from "./pages/SearchPage";
+import { TimerBar } from "./components/TimerBar";
 import { SummaryPage } from "./pages/SummaryPage";
 import { SetupPage } from "./pages/SetupPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -22,12 +24,14 @@ export interface Data {
   categories: Rec<Category>[];
 }
 
-type Page = "entries" | "summary" | "setup" | "settings";
+type Page = "entries" | "search" | "summary" | "setup" | "settings";
 
 export function App() {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState<Page>("entries");
+  // Bumped when something outside the entry list (the timer) changes entries.
+  const [version, setVersion] = useState(0);
 
   const reload = useCallback(async () => {
     try {
@@ -61,7 +65,7 @@ export function App() {
     <div className="shell">
       <nav aria-label={t("ui.nav.label")}>
         <strong className="brand">{t("ui.app.name")}</strong>
-        {(["entries", "summary", "setup", "settings"] as Page[]).map((p) => (
+        {(["entries", "search", "summary", "setup", "settings"] as Page[]).map((p) => (
           <button
             key={p}
             aria-current={page === p ? "page" : undefined}
@@ -72,7 +76,9 @@ export function App() {
         ))}
       </nav>
       <main>
-        {page === "entries" && <EntriesPage data={data} />}
+        <TimerBar data={data} onChanged={() => setVersion((v) => v + 1)} />
+        {page === "entries" && <EntriesPage data={data} version={version} />}
+        {page === "search" && <SearchPage data={data} />}
         {page === "summary" && <SummaryPage data={data} />}
         {page === "setup" && <SetupPage data={data} reload={reload} />}
         {page === "settings" && <SettingsPage data={data} reload={reload} />}

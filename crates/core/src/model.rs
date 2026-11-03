@@ -11,6 +11,7 @@ pub const KIND_PROJECT: &str = "project";
 pub const KIND_CATEGORY: &str = "category";
 pub const KIND_ENTRY: &str = "entry";
 pub const KIND_SETTINGS: &str = "settings";
+pub const KIND_TIMER: &str = "timer";
 
 pub const MAX_TAGS: usize = 10;
 pub const MAX_TAG_LENGTH: usize = 40;
@@ -121,6 +122,20 @@ pub struct TimeEntry {
     pub piece_count: u32,
     pub span_start_at: Option<DateTime<Utc>>,
     pub span_end_at: Option<DateTime<Utc>>,
+}
+
+/// The running timer (concept §9). At most one exists per person. Its start
+/// is captured to the minute.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Timer {
+    pub project_id: Id,
+    pub category_id: Id,
+    pub description: String,
+    pub billable: Option<bool>,
+    pub tags: Vec<String>,
+    pub start_at: DateTime<Utc>,
+    /// The zone in force when the timer started.
+    pub timezone: String,
 }
 
 pub fn require_name(name: &str) -> Result<String, ModelError> {

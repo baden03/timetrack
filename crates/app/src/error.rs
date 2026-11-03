@@ -36,6 +36,12 @@ pub enum AppError {
     CategoryNotEnabled,
     #[error("still referenced")]
     StillReferenced,
+    #[error("a timer is already running")]
+    TimerRunning,
+    #[error("no timer is running")]
+    NoTimer,
+    #[error("nothing to repeat")]
+    NothingToRepeat,
     #[error("invalid month")]
     InvalidMonth,
     #[error("unknown command")]
@@ -61,6 +67,9 @@ impl AppError {
             AppError::ClientArchived => "client_archived",
             AppError::CategoryNotEnabled => "category_not_enabled",
             AppError::StillReferenced => "still_referenced",
+            AppError::TimerRunning => "timer_running",
+            AppError::NoTimer => "no_timer",
+            AppError::NothingToRepeat => "nothing_to_repeat",
             AppError::InvalidMonth => "invalid_month",
             AppError::UnknownCommand => "unknown_command",
             AppError::InvalidArguments => "invalid_arguments",

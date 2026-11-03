@@ -522,3 +522,72 @@ fn monthly_summary_is_billable_only_and_splits_at_month_end() {
         "invalid_month"
     );
 }
+
+#[test]
+fn search_filters_and_totals() {
+    use timetrack_app::SearchQuery;
+    let mut f = fixture();
+    let mut a = interval(&f, "2026-11-02", "09:00", "10:00");
+    a.description = "Fix Safari bug".into();
+    a.tags = vec!["Bug".into()];
+    f.app.create_entry(a).unwrap();
+    let mut b = interval(&f, "2026-11-03", "09:00", "11:00");
+    b.description = "Kickoff meeting".into();
+    b.billable = Some(false);
+    f.app.create_entry(b).unwrap();
+
+    let q = |f: &Fixture, q: SearchQuery| f.app.search_entries(&q).unwrap();
+    let all = q(&f, SearchQuery::default());
+    assert_eq!((all.pieces.len(), all.total_minutes), (2, 180));
+    assert_eq!(all.pieces[0].payload["work_date"], "2026-11-03"); // newest first
+    let text = q(
+        &f,
+        SearchQuery {
+            text: Some("safari".into()),
+            ..Default::default()
+        },
+    );
+    assert_eq!(text.total_minutes, 60);
+    let tag = q(
+        &f,
+        SearchQuery {
+            tag: Some("bug".into()),
+            ..Default::default()
+        },
+    );
+    assert_eq!(tag.pieces.len(), 1);
+    let unbilled = q(
+        &f,
+        SearchQuery {
+            billable: Some(false),
+            ..Default::default()
+        },
+    );
+    assert_eq!(unbilled.total_minutes, 120);
+    let dated = q(
+        &f,
+        SearchQuery {
+            from: Some("2026-11-03".into()),
+            ..Default::default()
+        },
+    );
+    assert_eq!(dated.pieces.len(), 1);
+    let none = q(
+        &f,
+        SearchQuery {
+            text: Some("zzz".into()),
+            ..Default::default()
+        },
+    );
+    assert_eq!(none.pieces.len(), 0);
+
+    let client = f.app.list(KIND_CLIENT, false).unwrap().remove(0);
+    let by_client = q(
+        &f,
+        SearchQuery {
+            client_id: Some(client.id),
+            ..Default::default()
+        },
+    );
+    assert_eq!(by_client.pieces.len(), 2);
+}

@@ -11,7 +11,9 @@ use timetrack_storage::Store;
 
 use crate::entries::{EntryPatch, NewEntry};
 use crate::error::{AppError, Result};
+use crate::search::SearchQuery;
 use crate::service::{App, ProjectInput};
+use crate::timer::{StartTimer, StopTimer};
 
 fn arg<T: DeserializeOwned>(args: &Value, name: &str) -> Result<T> {
     let value = args.get(name).ok_or(AppError::InvalidArguments)?;
@@ -88,6 +90,15 @@ impl<S: Store> App<S> {
                 &arg::<Id>(args, "project_id")?,
                 &arg::<String>(args, "date")?,
             )?),
+            "timer_state" => out(self.timer_state()?),
+            "start_timer" => out(self.start_timer(arg::<StartTimer>(args, "timer")?)?),
+            "quick_start_timer" => out(self.quick_start_timer()?),
+            "update_timer" => {
+                out(self.update_timer(opt(args, "description")?, opt(args, "tags")?)?)
+            }
+            "stop_timer" => out(self.stop_timer(arg::<StopTimer>(args, "stop")?)?),
+            "discard_timer" => out(self.discard_timer()?),
+            "search_entries" => out(self.search_entries(&arg::<SearchQuery>(args, "query")?)?),
             "monthly_summary" => out(self.monthly_summary(&arg::<String>(args, "month")?)?),
             "history" => out(self.history(&arg::<Id>(args, "id")?)?),
             _ => Err(AppError::UnknownCommand),

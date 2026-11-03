@@ -51,3 +51,18 @@ export function displayDate(iso: string, format: Settings["date_format"]): strin
 }
 
 export const DATE_FORMATS = ["DD.MM.YYYY", "YYYY-MM-DD", "MM/DD/YYYY"];
+
+/** Monday of the week containing an ISO date. */
+export function weekStart(iso: string): string {
+  const day = new Date(`${iso}T12:00:00Z`).getUTCDay(); // 0 = Sunday
+  return addDays(iso, -((day + 6) % 7));
+}
+
+/** Elapsed time as `h:mm:ss`. */
+export function formatElapsed(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor(total / 60) % 60;
+  const sec = total % 60;
+  return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}

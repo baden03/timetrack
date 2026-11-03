@@ -3,20 +3,24 @@ import { call, type Rec, type TimeEntry, type Timing } from "../api";
 import type { Data } from "../App";
 import { ErrorLine, errorText } from "./Errors";
 import { t } from "../i18n";
-import { clockIn, displayDate, displayTime, formatHhmm, parseHhmm } from "../time";
+import { HistoryPanel } from "./HistoryPanel";
+import { addDays, clockIn, displayDate, displayTime, formatHhmm, parseHhmm, weekStart } from "../time";
 
 export function EntryList({
   data,
   entries,
+  view,
   onChanged,
 }: {
   data: Data;
   entries: Rec<TimeEntry>[];
+  view: "day" | "week";
   onChanged: () => Promise<void>;
 }) {
   const settings = data.state.settings.payload;
   const [editing, setEditing] = useState<string | null>(null); // record id of the row being edited
   const [error, setError] = useState<string | null>(null);
+  const [historyOf, setHistoryOf] = useState<string | null>(null); // record id
 
   if (entries.length === 0) return <p className="muted">{t("ui.entries.empty")}</p>;
 
@@ -43,11 +47,26 @@ export function EntryList({
   return (
     <div>
       <ErrorLine message={error} />
-      {dates.map((date) => {
+      {dates.map((date, index) => {
         const rows = byDate.get(date)!;
         const total = rows.reduce((sum, r) => sum + r.payload.minutes, 0);
+        const week = weekStart(date);
+        const startsWeek = view === "week" && (index === 0 || weekStart(dates[index - 1]) !== week);
+        const weekTotal = dates
+          .filter((d) => weekStart(d) === week)
+          .reduce((sum, d) => sum + byDate.get(d)!.reduce((a, r) => a + r.payload.minutes, 0), 0);
         return (
-          <section key={date} className="day">
+          <div key={date}>
+            {startsWeek && (
+              <h2 className="week">
+                {t("ui.entries.week_of", {
+                  start: displayDate(week, settings.date_format),
+                  end: displayDate(addDays(week, 6), settings.date_format),
+                })}
+                <span className="total">{formatHhmm(weekTotal)}</span>
+              </h2>
+            )}
+          <section className="day">
             <h2>
               {displayDate(date, settings.date_format)}
               <span className="total">{formatHhmm(total)}</span>
@@ -87,12 +106,15 @@ export function EntryList({
                         rec={rec}
                         onEdit={() => setEditing(rec.id)}
                         onDelete={() => remove(rec)}
+                        historyOpen={historyOf === rec.id}
+                        onHistory={() => setHistoryOf(historyOf === rec.id ? null : rec.id)}
                       />
                     ),
                   )}
               </tbody>
             </table>
           </section>
+          </div>
         );
       })}
     </div>
@@ -114,11 +136,15 @@ function ViewRow({
   rec,
   onEdit,
   onDelete,
+  historyOpen,
+  onHistory,
 }: {
   data: Data;
   rec: Rec<TimeEntry>;
   onEdit: () => void;
   onDelete: () => void;
+  historyOpen: boolean;
+  onHistory: () => void;
 }) {
   const e = rec.payload;
   const s = data.state.settings.payload;
@@ -127,6 +153,7 @@ function ViewRow({
   const endsAtMidnight =
     e.end_at !== null && e.piece_index < e.piece_count - 1 && e.piece_count > 1;
   return (
+    <>
     <tr tabIndex={0} onDoubleClick={onEdit} onKeyDown={(k) => k.key === "Enter" && onEdit()}>
       <td>{e.start_at ? displayTime(e.start_at, e.timezone, s.clock_24h) : "–"}</td>
       <td>{e.end_at ? (endsAtMidnight ? "24:00" : displayTime(e.end_at, e.timezone, s.clock_24h)) : "–"}</td>
@@ -141,11 +168,20 @@ function ViewRow({
       <td>{e.billable ? t("ui.yes") : t("ui.no")}</td>
       <td className="actions">
         <button onClick={onEdit}>{t("ui.edit")}</button>
+        <button onClick={onHistory}>{historyOpen ? t("ui.history.hide") : t("ui.history.show")}</button>
         <button className="danger" onClick={onDelete}>
           {t("ui.entries.delete")}
         </button>
       </td>
     </tr>
+    {historyOpen && (
+      <tr>
+        <td colSpan={9}>
+          <HistoryPanel data={data} id={rec.id} />
+        </td>
+      </tr>
+    )}
+    </>
   );
 }
 

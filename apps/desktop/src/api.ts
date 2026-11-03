@@ -78,13 +78,43 @@ export interface EntryPatch {
 export interface SavedEntry { pieces: Rec<TimeEntry>[]; overlaps: string[] }
 export interface Suggestion { start: string | null; category_id: Id | null }
 
+export interface Timer {
+  project_id: Id;
+  category_id: Id;
+  description: string;
+  billable: boolean | null;
+  tags: string[];
+  start_at: string;
+  timezone: string;
+}
+export interface TimerState { timer: Rec<Timer> | null; stale: boolean }
+export interface SearchQuery {
+  text?: string;
+  client_id?: Id;
+  project_id?: Id;
+  category_id?: Id;
+  tag?: string;
+  billable?: boolean;
+  from?: string;
+  to?: string;
+}
+export interface SearchResult { pieces: Rec<TimeEntry>[]; total_minutes: number }
+export interface HistoryEntry {
+  record_id: Id;
+  revision: number;
+  op: "create" | "revise" | "delete";
+  at: string;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+}
+
 export class CommandError extends Error {
   constructor(public code: string) {
     super(code);
   }
 }
 
-const inTauri = "__TAURI_INTERNALS__" in window;
+export const inTauri = "__TAURI_INTERNALS__" in window;
 
 /** Development bridge (crates/app/examples/dev_bridge.rs) for plain browsers. */
 async function callBridge<T>(command: string, args: object): Promise<T> {

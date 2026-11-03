@@ -79,3 +79,13 @@ th { text-align: start; font-weight: 500; color: var(--muted); font-size: .8rem;
 td { padding: .3rem .4rem; border-bottom: 1px solid var(--border); vertical-align: top; font-variant-numeric: tabular-nums; }
 tr.editing td { background: var(--surface); }
 pre.summary { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .8rem; overflow: auto; white-space: pre-wrap; user-select: text; }
+
+.timer-bar { display: flex; flex-wrap: wrap; gap: .6rem; align-items: end; padding: .5rem .8rem; margin-block-end: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.timer-bar.running { align-items: center; border-color: var(--accent); }
+.timer-bar.stale { border-color: var(--warning); flex-direction: column; align-items: stretch; }
+.timer-bar .dot { color: var(--danger); }
+.timer-bar .elapsed { font-variant-numeric: tabular-nums; font-size: 1.1rem; }
+.timer-bar.running input { flex: 1 1 12rem; }
+h2.week { display: flex; justify-content: space-between; margin-block-start: 1.5rem; padding: .3rem .5rem; background: var(--surface); border-radius: 6px; }
+.history { padding: .3rem .8rem; background: var(--surface); border-radius: 6px; }
+.history ol { margin: 0; padding-inline-start: 1.2rem; }
