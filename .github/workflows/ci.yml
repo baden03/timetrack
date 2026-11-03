@@ -1,8 +1,16 @@
 name: CI
 
+# Checks are not run on every push or pull request at this stage; scripts/check.sh
+# gives the same result locally. They run:
+#  - by hand before a release: Actions, CI, "Run workflow" on the branch to be
+#    released, or `gh workflow run ci.yml --ref <branch>`; and
+#  - when a version tag (v0.0.1 and so on) is pushed, which is what publishing a
+#    release does, so a published release always has a recorded result.
 on:
+  workflow_dispatch:
   push:
-  pull_request:
+    tags:
+      - "v*"
 
 jobs:
   check:
