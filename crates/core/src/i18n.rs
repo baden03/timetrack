@@ -3,6 +3,23 @@
 
 use std::collections::BTreeMap;
 
+/// Interface languages: a code and its catalog. To add a language, add a line
+/// here (see docs/translating.md). English is the base: a message missing in
+/// another language falls back to it, and a raw key is never shown.
+const CATALOGS: [(&str, &str); 2] = [
+    ("en", include_str!("../../../i18n/en.json")),
+    ("de", include_str!("../../../i18n/de.json")),
+];
+
+/// The codes of the available languages.
+pub fn languages() -> impl Iterator<Item = &'static str> {
+    CATALOGS.iter().map(|(code, _)| *code)
+}
+
+pub fn is_supported(language: &str) -> bool {
+    languages().any(|code| code == language)
+}
+
 pub struct Catalog {
     messages: BTreeMap<String, String>,
 }
@@ -17,6 +34,24 @@ impl Catalog {
     /// English, embedded in the binary.
     pub fn english() -> Self {
         Self::from_json(include_str!("../../../i18n/en.json")).expect("i18n/en.json is valid")
+    }
+
+    /// The catalog for a language, with English filling any gap. An unknown
+    /// code gives English.
+    pub fn for_language(language: &str) -> Self {
+        let mut catalog = Self::english();
+        let overlay = CATALOGS
+            .iter()
+            .find(|(code, _)| *code == language && *code != "en")
+            .map(|(_, json)| *json);
+        if let Some(json) = overlay {
+            let translated: BTreeMap<String, String> =
+                serde_json::from_str(json).expect("language catalog is valid");
+            catalog
+                .messages
+                .extend(translated.into_iter().filter(|(_, v)| !v.trim().is_empty()));
+        }
+        catalog
     }
 
     pub fn get(&self, key: &str) -> Option<&str> {
@@ -84,17 +119,63 @@ mod tests {
         for file in files {
             let text = std::fs::read_to_string(&file).unwrap();
             for key in referenced_keys(&text) {
-                assert!(
-                    catalog.get(&key).is_some(),
-                    "{}: unknown key {key}",
-                    file.display()
-                );
+                // A plural message exists as `key.one` and `key.other`.
+                let known =
+                    catalog.get(&key).is_some() || catalog.get(&format!("{key}.other")).is_some();
+                assert!(known, "{}: unknown key {key}", file.display());
                 checked += 1;
             }
         }
         // The scan itself is exercised by this literal reference below.
         assert!(referenced_keys("t(\"error.not_found\")").len() == 1);
         let _ = checked;
+    }
+
+    fn placeholders(text: &str) -> std::collections::BTreeSet<String> {
+        let mut out = std::collections::BTreeSet::new();
+        let mut rest = text;
+        while let Some(start) = rest.find('{') {
+            let tail = &rest[start + 1..];
+            let Some(end) = tail.find('}') else { break };
+            out.insert(tail[..end].to_owned());
+            rest = &tail[end + 1..];
+        }
+        out
+    }
+
+    /// Every language has exactly the keys English has, no empty text, and the
+    /// same `{placeholders}` in each message, so nothing can be silently lost.
+    #[test]
+    fn every_language_matches_english() {
+        let english = Catalog::english();
+        for (code, json) in CATALOGS.iter().filter(|(code, _)| *code != "en") {
+            assert!(is_supported(code));
+            let other = Catalog::from_json(json).unwrap();
+            let en_keys: Vec<&str> = english.keys().collect();
+            let other_keys: Vec<&str> = other.keys().collect();
+            assert_eq!(en_keys, other_keys, "{code}: keys differ from English");
+            for key in en_keys {
+                let text = other.get(key).unwrap();
+                assert!(!text.trim().is_empty(), "{code}: {key} is empty");
+                assert_eq!(
+                    placeholders(english.get(key).unwrap()),
+                    placeholders(text),
+                    "{code}: placeholders of {key} differ"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_language_falls_back_to_english_and_unknown_codes_give_english() {
+        let german = Catalog::for_language("de");
+        assert_eq!(german.text("month.3"), "März");
+        assert_eq!(Catalog::for_language("xx").text("month.3"), "March");
+        // Every key resolves in every language, so no raw key is ever shown.
+        for key in Catalog::english().keys() {
+            assert!(german.get(key).is_some());
+        }
+        assert!(!is_supported("fr"));
     }
 
     fn referenced_keys(text: &str) -> Vec<String> {

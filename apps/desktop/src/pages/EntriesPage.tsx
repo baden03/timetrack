@@ -46,7 +46,7 @@ export function EntriesPage({ data, version }: { data: Data; version: number }) 
       </div>
       <EntryList data={data} entries={entries} view={view} onChanged={load} />
       <button className="link" onClick={() => setWindowDays(windowDays + settings.entry_window_days)}>
-        {t("ui.entries.older", { days: windowDays })}
+        {t("ui.entries.older", { count: windowDays })}
       </button>
     </div>
   );

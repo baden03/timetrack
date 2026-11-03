@@ -153,6 +153,9 @@ impl<S: Store> App<S> {
         new.timezone
             .parse::<Tz>()
             .map_err(|_| AppError::UnknownTimeZone)?;
+        if !timetrack_core::i18n::is_supported(&new.language) {
+            return Err(AppError::UnsupportedLanguage);
+        }
         let rec = self.settings()?;
         self.revise(&rec, &new)
     }

@@ -8,7 +8,7 @@ import {
   type Project,
   type Rec,
 } from "./api";
-import { tError, t } from "./i18n";
+import { setLanguage, tError, t } from "./i18n";
 import { CommandError } from "./api";
 import { EntriesPage } from "./pages/EntriesPage";
 import { FirstRun } from "./pages/FirstRun";
@@ -82,6 +82,8 @@ export function App() {
 
   if (error) return <p role="alert" className="error">{error}</p>;
   if (!data) return <p>{t("ui.loading")}</p>;
+  // Every message below is looked up in the language chosen in Settings.
+  setLanguage(data.state.settings.payload.language);
   if (data.state.first_run) return <FirstRun onDone={reload} />;
 
   return (

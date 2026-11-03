@@ -7,7 +7,7 @@ type AskPath = (message: string, initial: string) => Promise<string | null>;
 export async function chooseBackupSavePath(defaultName: string, ask: AskPath): Promise<string | null> {
   if (inTauri) {
     const { save } = await import("@tauri-apps/plugin-dialog");
-    return save({ defaultPath: defaultName, filters: [{ name: "TimeTrack backup", extensions: ["sqlite"] }] });
+    return save({ defaultPath: defaultName, filters: [{ name: t("ui.backup.file_type"), extensions: ["sqlite"] }] });
   }
   // A plain browser (development only) has no file dialog.
   return ask(t("ui.backup.path_prompt"), `/tmp/${defaultName}`);
@@ -20,7 +20,7 @@ export async function chooseBackupOpenPath(ask: AskPath): Promise<string | null>
     const picked = await open({
       multiple: false,
       directory: false,
-      filters: [{ name: "TimeTrack backup", extensions: ["sqlite"] }],
+      filters: [{ name: t("ui.backup.file_type"), extensions: ["sqlite"] }],
     });
     return typeof picked === "string" ? picked : null;
   }

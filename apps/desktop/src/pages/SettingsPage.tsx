@@ -2,7 +2,7 @@ import { useState } from "react";
 import { call, type Settings } from "../api";
 import type { Data } from "../App";
 import { ErrorLine, errorText } from "../components/Errors";
-import { t } from "../i18n";
+import { LANGUAGES, t } from "../i18n";
 import { DATE_FORMATS } from "../time";
 import { useBackup } from "../components/Backup";
 
@@ -88,8 +88,12 @@ export function SettingsPage({ data, reload }: { data: Data; reload: () => Promi
       </label>
       <label>
         {t("ui.settings.language")}
-        <select value={s.language} disabled>
-          <option value="en">English</option>
+        <select value={s.language} onChange={(e) => set("language", e.target.value)}>
+          {LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code}>
+              {l.name}
+            </option>
+          ))}
         </select>
       </label>
       <div className="actions">
