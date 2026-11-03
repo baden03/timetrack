@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- macOS app icon shape: 824 x 824 rounded square centred in a 1024 canvas, corners transparent -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#0b5bd3"/>
+  <circle cx="512" cy="512" r="262" fill="none" stroke="#ffffff" stroke-width="46"/>
+  <path d="M512 340 V512 L624 576" fill="none" stroke="#ffffff" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
