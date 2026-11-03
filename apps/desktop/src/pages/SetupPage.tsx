@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { call, type Category, type Client, type Project, type Rec, type Status } from "../api";
 import type { Data } from "../App";
+import { colorOf } from "../colors";
+import { ColorDot, ColorField } from "../components/Color";
 import { useDialogs } from "../components/Dialogs";
 import { ErrorLine, errorText } from "../components/Errors";
 import { t } from "../i18n";
@@ -46,6 +48,7 @@ export function SetupPage({ data, reload }: { data: Data; reload: () => Promise<
           kind="client"
           items={data.clients}
           onAdd={(name) => run(() => call("create_client", { name }))}
+          onColor={(rec, color) => run(() => call("set_client_color", { id: rec.id, color }))}
           onRename={rename}
           onToggle={toggle}
           onDelete={remove}
@@ -70,11 +73,14 @@ function NamedList<T extends Client | Category>(props: {
   kind: Kind;
   items: Rec<T>[];
   onAdd: (name: string) => Promise<void>;
+  /** Offered for clients only: sets or removes the color. */
+  onColor?: (rec: Rec<T>, color: string | null) => Promise<void>;
   onRename: (kind: Kind, rec: Rec<T>) => Promise<void>;
   onToggle: (kind: Kind, rec: Rec<T>) => Promise<void>;
   onDelete: (kind: Kind, rec: Rec<T>) => Promise<void>;
 }) {
   const [name, setName] = useState("");
+  const [coloring, setColoring] = useState<string | null>(null); // record id
   return (
     <section>
       <h2>{props.title}</h2>
@@ -98,8 +104,16 @@ function NamedList<T extends Client | Category>(props: {
         {props.items.length === 0 && <li className="muted">{t("ui.setup.none")}</li>}
         {props.items.map((rec) => (
           <li key={rec.id} className={rec.payload.status === "archived" ? "archived" : ""}>
-            <span>{rec.payload.name}</span>
+            <span>
+              {props.onColor && <ColorDot color={(rec.payload as Client).color} />}
+              {rec.payload.name}
+            </span>
             <span className="actions">
+              {props.onColor && (
+                <button aria-expanded={coloring === rec.id} onClick={() => setColoring(coloring === rec.id ? null : rec.id)}>
+                  {t("ui.setup.color")}
+                </button>
+              )}
               <button onClick={() => props.onRename(props.kind, rec)}>{t("ui.setup.rename")}</button>
               <button onClick={() => props.onToggle(props.kind, rec)}>
                 {rec.payload.status === "active" ? t("ui.setup.archive") : t("ui.setup.restore")}
@@ -108,6 +122,13 @@ function NamedList<T extends Client | Category>(props: {
                 {t("ui.setup.delete")}
               </button>
             </span>
+            {props.onColor && coloring === rec.id && (
+              <ColorField
+                legend={t("ui.setup.color_of", { name: rec.payload.name })}
+                value={(rec.payload as Client).color}
+                onChange={(color) => void props.onColor?.(rec, color)}
+              />
+            )}
           </li>
         ))}
       </ul>
@@ -154,6 +175,12 @@ function ProjectsSection(props: {
         {data.projects.map((rec) => (
           <li key={rec.id} className={rec.payload.status === "archived" ? "archived" : ""}>
             <span>
+              <ColorDot
+                color={colorOf(
+                  rec.payload,
+                  data.clients.find((c) => c.id === rec.payload.client_id)?.payload,
+                )}
+              />
               {clientName(rec.payload.client_id)} / {rec.payload.name}
             </span>
             <span className="actions">
@@ -183,6 +210,7 @@ function ProjectForm(props: {
   const [clientId, setClientId] = useState(project?.payload.client_id ?? activeClients[0]?.id ?? "");
   const [name, setName] = useState(project?.payload.name ?? "");
   const [description, setDescription] = useState(project?.payload.description ?? "");
+  const [color, setColor] = useState<string | null>(project?.payload.color ?? null);
   const [billable, setBillable] = useState(project?.payload.billable_default ?? true);
   const [cats, setCats] = useState<string[]>(project?.payload.category_ids ?? []);
   const categories = data.categories.filter(
@@ -199,6 +227,7 @@ function ProjectForm(props: {
           description,
           billable_default: billable,
           category_ids: cats,
+          color,
         });
       }}
       onKeyDown={(e) => e.key === "Escape" && props.onCancel()}
@@ -223,6 +252,7 @@ function ProjectForm(props: {
         {t("ui.setup.description")}
         <input value={description} onChange={(e) => setDescription(e.target.value)} />
       </label>
+      <ColorField legend={t("ui.setup.project_color")} value={color} onChange={setColor} />
       <label className="check">
         <input type="checkbox" checked={billable} onChange={(e) => setBillable(e.target.checked)} />
         {t("ui.setup.billable_default")}

@@ -95,6 +95,7 @@ mod tests {
             ModelError::EmptyTag.code(),
             ModelError::TagTooLong.code(),
             ModelError::TooManyTags.code(),
+            ModelError::InvalidColor.code(),
         ];
         for code in codes {
             assert!(

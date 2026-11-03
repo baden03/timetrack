@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { call, type SearchQuery, type SearchResult } from "../api";
 import type { Data } from "../App";
+import { DescriptionText } from "../components/DescriptionText";
 import { ErrorLine, errorText } from "../components/Errors";
 import { t, tError } from "../i18n";
+import { colorOf } from "../colors";
+import { ColorDot } from "../components/Color";
 import { DateInput } from "../components/FormatInputs";
 import { displayDate, displayTime, formatHhmm, parseDate } from "../time";
 
@@ -125,7 +128,6 @@ export function SearchPage({ data }: { data: Data }) {
                   <th>{t("ui.entries.project")}</th>
                   <th>{t("ui.entries.category")}</th>
                   <th>{t("ui.entries.description")}</th>
-                  <th>{t("ui.entries.tags")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -138,11 +140,18 @@ export function SearchPage({ data }: { data: Data }) {
                       <td>{e.start_at ? displayTime(e.start_at, e.timezone, s.clock_24h) : "–"}</td>
                       <td>{formatHhmm(e.minutes)}</td>
                       <td>
+                        <ColorDot
+                          color={colorOf(
+                            project?.payload,
+                            data.clients.find((c) => c.id === project?.payload.client_id)?.payload,
+                          )}
+                        />
                         {name(data.clients, project?.payload.client_id ?? "")} / {project?.payload.name}
                       </td>
                       <td>{name(data.categories, e.category_id ?? "")}</td>
-                      <td>{e.description}</td>
-                      <td>{e.tags.join(", ")}</td>
+                      <td>
+                        <DescriptionText text={e.description} tags={e.tags} />
+                      </td>
                     </tr>
                   );
                 })}

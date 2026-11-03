@@ -18,6 +18,7 @@ use crate::service::{payload, App};
 pub struct ProjectCard {
     pub project: Record,
     pub client_name: String,
+    pub client_color: Option<String>,
     /// When time was last recorded on the project (the project's creation if
     /// none), or now while its timer runs. Cards are ordered by this.
     pub last_activity: DateTime<Utc>,
@@ -75,6 +76,7 @@ impl<S: Store> App<S> {
             };
             cards.push(ProjectCard {
                 client_name: client.name.clone(),
+                client_color: client.color.clone(),
                 last_activity,
                 running: is_running,
                 project: rec,

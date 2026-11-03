@@ -85,7 +85,8 @@
     { "name": "end before start", "start": "2026-11-02T10:00:00Z", "end": "2026-11-02T09:00:00Z", "now": "2026-11-03T00:00:00Z", "code": "end_not_after_start" },
     { "name": "start equals end", "start": "2026-11-02T10:00:00Z", "end": "2026-11-02T10:00:00Z", "now": "2026-11-03T00:00:00Z", "code": "end_not_after_start" },
     { "name": "over 24 hours", "start": "2026-11-01T08:00:00Z", "end": "2026-11-02T08:01:00Z", "now": "2026-11-03T00:00:00Z", "code": "interval_too_long" },
-    { "name": "in the future", "start": "2026-11-02T10:00:00Z", "end": "2026-11-02T12:00:00Z", "now": "2026-11-02T11:00:00Z", "code": "entry_in_future" }
+    { "name": "an hour in the future", "start": "2026-11-02T10:00:00Z", "end": "2026-11-02T12:00:00Z", "now": "2026-11-02T11:00:00Z", "code": "entry_in_future" },
+    { "name": "sixteen minutes ahead is too far", "start": "2026-11-02T10:00:00Z", "end": "2026-11-02T11:16:00Z", "now": "2026-11-02T11:00:00Z", "code": "entry_in_future" }
   ],
   "durations": [
     { "minutes": 0, "valid": false },

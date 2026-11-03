@@ -33,7 +33,7 @@ fn setup(now: &str) -> S {
         clock,
     )
     .unwrap();
-    let client = app.create_client("Acme").unwrap();
+    let client = app.create_client("Acme", None).unwrap();
     let project = app
         .create_project(ProjectInput {
             client_id: client.id,
@@ -41,6 +41,7 @@ fn setup(now: &str) -> S {
             description: String::new(),
             billable_default: true,
             category_ids: vec![],
+            color: None,
         })
         .unwrap();
     S {

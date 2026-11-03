@@ -6,8 +6,8 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use timetrack_core::id::{Id, IdGenerator, Origin};
 use timetrack_core::model::{
-    require_name, Category, Client, Project, Settings, Status, Theme, KIND_CATEGORY, KIND_CLIENT,
-    KIND_ENTRY, KIND_PROJECT, KIND_SETTINGS,
+    normalize_color, require_name, Category, Client, Project, Settings, Status, Theme,
+    KIND_CATEGORY, KIND_CLIENT, KIND_ENTRY, KIND_PROJECT, KIND_SETTINGS,
 };
 use timetrack_core::record::{Actor, HistoryEntry, Record};
 use timetrack_storage::Store;
@@ -43,6 +43,9 @@ pub struct ProjectInput {
     pub description: String,
     pub billable_default: bool,
     pub category_ids: Vec<Id>,
+    /// Optional `#rrggbb`.
+    #[serde(default)]
+    pub color: Option<String>,
 }
 
 pub struct App<S: Store> {
@@ -162,9 +165,10 @@ impl<S: Store> App<S> {
 
     // ---- clients, categories, projects ---------------------------------
 
-    pub fn create_client(&mut self, name: &str) -> Result<Record> {
+    pub fn create_client(&mut self, name: &str, color: Option<&str>) -> Result<Record> {
         let payload = Client {
             name: require_name(name)?,
+            color: normalize_color(color)?,
             status: Status::Active,
         };
         self.create(KIND_CLIENT, &payload)
@@ -174,6 +178,14 @@ impl<S: Store> App<S> {
         let rec = self.load(id, KIND_CLIENT)?;
         let mut c: Client = payload(&rec)?;
         c.name = require_name(name)?;
+        self.revise(&rec, &c)
+    }
+
+    /// Sets or removes (`None`) the client's color.
+    pub fn set_client_color(&mut self, id: &Id, color: Option<&str>) -> Result<Record> {
+        let rec = self.load(id, KIND_CLIENT)?;
+        let mut c: Client = payload(&rec)?;
+        c.color = normalize_color(color)?;
         self.revise(&rec, &c)
     }
 
@@ -294,6 +306,7 @@ impl<S: Store> App<S> {
         Ok(Project {
             client_id: input.client_id,
             name: require_name(&input.name)?,
+            color: normalize_color(input.color.as_deref())?,
             description: input.description.trim().to_owned(),
             billable_default: input.billable_default,
             category_ids: input.category_ids,

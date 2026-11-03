@@ -460,7 +460,7 @@ Required: project, category, description, and either (start and end) or a durati
 ## 8.3 Dates and timezones
 
 - Entries default to today in the user's timezone and may be back-dated. Existing entries may be modified until locked (§12).
-- Entries dated or ending in the future are rejected.
+- Entries dated in the future are rejected. An entry may end up to **15 minutes** after the device clock, so a time can be rounded up (14:27 to 14:30); an end further ahead is rejected.
 - `workDate` is a plain calendar date computed in the entry's stored timezone. Changing the timezone preference affects only later entries.
 - An ambiguous wall-clock time (the repeated hour when daylight-saving time ends) uses the first occurrence.
 - Times are recorded as instants together with their zone and offsets, so their meaning never depends on the viewer's or the hub's timezone data (§8.5).
@@ -542,7 +542,8 @@ Clear feedback on success, validation failure, rejection on sync and version con
 # 9. Live Timer
 
 - A person has at most **one** running timer. The timer lives on the device and syncs with the person's other devices.
-- Start by choosing project and category. Description and tags are optional at this point.
+- Start by choosing a project. Category, description and tags are optional at this point; the category can be chosen when the timer stops, and defaults to the one last used on the project.
+- **Running notes.** While the timer runs, lines can be added (type, Enter). At the stop they become bullet points of the entry's description, with the text typed at the stop as the last bullet. A single line stays plain text.
 - A persistent indicator with elapsed time is visible in the header.
 - Stop: the description is confirmed (required). The entry becomes an ordinary interval and is split if it crosses midnight.
 - Start and stop times are captured to the minute.

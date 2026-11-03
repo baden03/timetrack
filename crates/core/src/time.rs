@@ -7,6 +7,9 @@ use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 
 pub const MAX_INTERVAL_MINUTES: i64 = 24 * 60;
+/// An entry may end this far ahead of the clock, so that a time can be
+/// rounded up (14:27 to 14:30) (concept §8.3).
+pub const FUTURE_TOLERANCE_MINUTES: i64 = 15;
 const MIN_OFFSET_MINUTES: i32 = -12 * 60;
 const MAX_OFFSET_MINUTES: i32 = 14 * 60;
 
@@ -85,7 +88,8 @@ pub fn parse_hhmm(text: &str) -> Option<i64> {
     Some(h.parse::<i64>().ok()? * 60 + minutes)
 }
 
-/// Validates an interval entry. `now` is the device clock.
+/// Validates an interval entry. `now` is the device clock; the end may be up
+/// to `FUTURE_TOLERANCE_MINUTES` after it.
 pub fn validate_interval(
     start: DateTime<Utc>,
     end: DateTime<Utc>,
@@ -101,7 +105,7 @@ pub fn validate_interval(
     if end - start > Duration::hours(24) {
         return Err(TimeError::TooLong);
     }
-    if end > now {
+    if end > now + Duration::minutes(FUTURE_TOLERANCE_MINUTES) {
         return Err(TimeError::InFuture);
     }
     Ok(minutes)
@@ -454,6 +458,25 @@ mod tests {
             let err = validate_interval(utc(&c.start), utc(&c.end), utc(&c.now)).unwrap_err();
             assert_eq!(err.code(), c.code, "{}", c.name);
         }
+    }
+
+    #[test]
+    fn an_end_up_to_fifteen_minutes_ahead_is_allowed() {
+        let now = utc("2026-11-02T14:27:00Z");
+        let start = utc("2026-11-02T13:00:00Z");
+        // Rounding 14:27 up to 14:30 (3 minutes ahead) and the 15 minute limit itself.
+        assert_eq!(
+            validate_interval(start, utc("2026-11-02T14:30:00Z"), now),
+            Ok(90)
+        );
+        assert_eq!(
+            validate_interval(start, utc("2026-11-02T14:42:00Z"), now),
+            Ok(102)
+        );
+        assert_eq!(
+            validate_interval(start, utc("2026-11-02T14:43:00Z"), now),
+            Err(TimeError::InFuture)
+        );
     }
 
     #[test]

@@ -261,16 +261,34 @@ impl<S: Store> App<S> {
         }
         let start = latest_end.map(|t| t.with_timezone(&zone).format("%H:%M").to_string());
 
-        let mut category_id = None;
-        let mut newest: Option<Id> = None;
+        let category_id = self.last_used_category(project_id)?;
+        Ok(Suggestion { start, category_id })
+    }
+
+    /// The category last used on a project: that of the newest entry which had
+    /// one and can still be used (the project enables it and it is not
+    /// archived); an unusable one is skipped for the next older.
+    pub(crate) fn last_used_category(&self, project_id: &Id) -> Result<Option<Id>> {
+        let mut used: Vec<(Id, Id)> = Vec::new(); // (entry record, category)
         for rec in self.store.list_by_date(KIND_ENTRY, None, None)? {
             let e: TimeEntry = payload(&rec)?;
-            if e.project_id == *project_id && newest.as_ref().is_none_or(|n| rec.id > *n) {
-                newest = Some(rec.id.clone());
-                category_id = e.category_id;
+            if let (true, Some(category)) = (e.project_id == *project_id, e.category_id) {
+                used.push((rec.id.clone(), category));
             }
         }
-        Ok(Suggestion { start, category_id })
+        used.sort_by(|a, b| b.0.cmp(&a.0));
+        let project: Project = payload(&self.load(project_id, KIND_PROJECT)?)?;
+        for (_, category) in used {
+            let usable = project.category_ids.contains(&category)
+                && self
+                    .load(&category, KIND_CATEGORY)
+                    .and_then(|r| payload::<Category>(&r))
+                    .is_ok_and(|c| c.status == Status::Active);
+            if usable {
+                return Ok(Some(category));
+            }
+        }
+        Ok(None)
     }
 
     // ---- internals ------------------------------------------------------

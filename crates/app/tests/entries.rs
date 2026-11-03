@@ -21,7 +21,7 @@ fn fixture() -> Fixture {
     let store = SqliteStore::open_in_memory().unwrap();
     // "Now" is after every date used below.
     let mut app = App::open(store, "Europe/Berlin", clock_at("2026-12-01T12:00:00Z")).unwrap();
-    let client = app.create_client("Acme").unwrap();
+    let client = app.create_client("Acme", None).unwrap();
     let category = app.create_category("Development").unwrap();
     let project = app
         .create_project(ProjectInput {
@@ -30,6 +30,7 @@ fn fixture() -> Fixture {
             description: String::new(),
             billable_default: true,
             category_ids: vec![category.id.clone()],
+            color: None,
         })
         .unwrap();
     Fixture {
@@ -142,7 +143,7 @@ fn reference_data_archive_restore_and_guarded_delete() {
 fn names_are_required() {
     let mut f = fixture();
     assert_eq!(
-        f.app.create_client("  ").unwrap_err().code(),
+        f.app.create_client("  ", None).unwrap_err().code(),
         "name_required"
     );
 }
@@ -674,4 +675,86 @@ fn language_setting_is_validated_and_drives_the_summary_text() {
         .unwrap()
         .text
         .contains("TimeTrack summary — November 2026"));
+}
+
+#[test]
+fn an_end_can_be_rounded_up_by_at_most_fifteen_minutes() {
+    let mut f = fixture();
+    // The clock reads 13:00 in Berlin on 2026-12-01.
+    let saved = f
+        .app
+        .create_entry(interval(&f, "2026-12-01", "12:00", "13:10"))
+        .unwrap();
+    let group = entry(&saved.pieces[0]).group_id;
+    let edit = |f: &mut Fixture, end: &str| {
+        f.app.update_entry(
+            &group,
+            EntryPatch {
+                timing: Some(Timing::Interval {
+                    date: "2026-12-01".into(),
+                    start: "12:00".into(),
+                    end: end.into(),
+                }),
+                ..Default::default()
+            },
+        )
+    };
+    assert_eq!(entry(&edit(&mut f, "13:15").unwrap().pieces[0]).minutes, 75);
+    assert_eq!(edit(&mut f, "13:16").unwrap_err().code(), "entry_in_future");
+}
+
+#[test]
+fn clients_and_projects_can_have_a_color() {
+    let mut f = fixture();
+    let client = f.app.create_client("Colorful", Some("#1F6FEB")).unwrap();
+    assert_eq!(client.payload["color"], "#1f6feb");
+    assert_eq!(
+        f.app.create_client("Plain", None).unwrap().payload["color"],
+        serde_json::Value::Null
+    );
+    assert_eq!(
+        f.app.create_client("Bad", Some("blue")).unwrap_err().code(),
+        "invalid_color"
+    );
+
+    // Set, change and remove.
+    let changed = f.app.set_client_color(&client.id, Some("#2da44e")).unwrap();
+    assert_eq!(changed.payload["color"], "#2da44e");
+    assert!(f.app.set_client_color(&client.id, None).unwrap().payload["color"].is_null());
+    assert_eq!(
+        f.app
+            .set_client_color(&client.id, Some("#12"))
+            .unwrap_err()
+            .code(),
+        "invalid_color"
+    );
+
+    // A project has its own color, and the dashboard also carries the client's.
+    f.app.set_client_color(&client.id, Some("#2da44e")).unwrap();
+    let project = f
+        .app
+        .create_project(ProjectInput {
+            client_id: client.id.clone(),
+            name: "Tinted".into(),
+            description: String::new(),
+            billable_default: true,
+            category_ids: vec![],
+            color: Some("#BF3989".into()),
+        })
+        .unwrap();
+    assert_eq!(project.payload["color"], "#bf3989");
+    let card = f
+        .app
+        .dashboard()
+        .unwrap()
+        .into_iter()
+        .find(|c| c.project.id == project.id)
+        .unwrap();
+    assert_eq!(card.client_color.as_deref(), Some("#2da44e"));
+
+    // Data saved before colors existed still loads.
+    let mut old = client.payload.clone();
+    old.as_object_mut().unwrap().remove("color");
+    let parsed: timetrack_core::model::Client = serde_json::from_value(old).unwrap();
+    assert!(parsed.color.is_none());
 }

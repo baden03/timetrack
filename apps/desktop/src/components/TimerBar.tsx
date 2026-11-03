@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { colorOf } from "../colors";
+import { ColorDot } from "./Color";
 import { call, inTauri, type Category, type Rec, type SavedEntry, type TimerState } from "../api";
 import type { Data } from "../App";
 import { ErrorLine, errorText } from "./Errors";
@@ -20,7 +22,19 @@ export function TimerBar({
   showIdle: boolean;
   onChanged: () => void;
 }) {
-  const [state, setState] = useState<TimerState>({ timer: null, stale: false });
+  const [state, setState] = useState<TimerState>({
+    timer: null,
+    stale: false,
+    suggested_category_id: null,
+  });
+  // What is typed in the note field and not yet entered.
+  const [draft, setDraft] = useState("");
+  const timerId = state.timer?.id;
+  const savedDraft = state.timer?.payload.description ?? "";
+  useEffect(() => {
+    setDraft(savedDraft);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timerId]);
   const [now, setNow] = useState(Date.now());
   const [error, setError] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
@@ -90,7 +104,13 @@ export function TimerBar({
   const project = data.projects.find((x) => x.id === p.project_id);
   const client = data.clients.find((c) => c.id === project?.payload.client_id);
   const category = data.categories.find((c) => c.id === p.category_id);
-  const label = `${client?.payload.name ?? ""} / ${project?.payload.name ?? ""}${category ? ` — ${category.payload.name}` : ""}`;
+  const label = (
+    <>
+      <ColorDot color={colorOf(project?.payload, client?.payload)} />
+      {client?.payload.name ?? ""} / {project?.payload.name ?? ""}
+      {category ? ` — ${category.payload.name}` : ""}
+    </>
+  );
   const projectCategories = data.categories.filter(
     (c) => c.id === p.category_id || (c.payload.status === "active" && project?.payload.category_ids.includes(c.id)),
   );
@@ -107,9 +127,10 @@ export function TimerBar({
         )}
         startedAt={clockIn(p.start_at, p.timezone)}
         clock24h={settings.clock_24h}
-        initialDescription={p.description}
+        initialDescription={draft}
+        notes={p.notes ?? []}
         categories={projectCategories}
-        initialCategory={p.category_id ?? ""}
+        initialCategory={p.category_id ?? state.suggested_category_id ?? ""}
         error={error}
         onStop={(description, endTime, categoryId) =>
           run(async () => {
@@ -130,23 +151,63 @@ export function TimerBar({
     );
   }
 
+  const addNote = async () => {
+    const text = draft.trim();
+    if (!text) return;
+    // Cleared at once, so the next note can be typed straight away; given back
+    // if the note could not be added.
+    setDraft("");
+    try {
+      await call("add_timer_note", { text });
+      setError(null);
+      await refresh();
+      onChanged();
+    } catch (e) {
+      setDraft(text);
+      setError(errorText(e));
+    }
+  };
+
   return (
     <div className="timer-bar running" role="status">
       <span className="dot" aria-hidden="true">●</span>
-      <strong>{label}</strong>
+      <strong className="what">{label}</strong>
       <span className="elapsed" aria-label={t("ui.timer.elapsed")}>
         {formatElapsed(now - new Date(p.exact_start_at ?? p.start_at).getTime())}
       </span>
       <input
-        aria-label={t("ui.entries.description")}
-        placeholder={t("ui.entries.description")}
-        defaultValue={p.description}
-        onBlur={(e) => {
-          if (e.target.value !== p.description)
-            void run(() => call("update_timer", { description: e.target.value }));
+        aria-label={t("ui.timer.note_label")}
+        placeholder={t("ui.timer.note_placeholder")}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            void addNote();
+          }
+        }}
+        onBlur={() => {
+          // Keep what was typed, in case the app is closed before it is entered.
+          if (draft !== p.description) void run(() => call("update_timer", { description: draft }));
         }}
       />
       <button onClick={() => setStopping(true)}>{t("ui.timer.stop")}</button>
+      {(p.notes ?? []).length > 0 && (
+        <ul className="notes" aria-label={t("ui.timer.notes")}>
+          {p.notes.map((note, i) => (
+            <li key={`${i}-${note}`}>
+              <span>{note}</span>
+              <button
+                className="link"
+                aria-label={t("ui.timer.remove_note", { note })}
+                onClick={() => void run(() => call("remove_timer_note", { index: i }))}
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <ErrorLine message={error} />
     </div>
   );
@@ -189,7 +250,8 @@ function IdleBar({
 }
 
 function StopForm(props: {
-  label: string;
+  label: ReactNode;
+  notes: string[];
   stale: boolean;
   startedOn: string;
   startedAt: string;
@@ -224,7 +286,14 @@ function StopForm(props: {
       }}
       onKeyDown={(e) => e.key === "Escape" && props.onCancel?.()}
     >
-      <strong>{props.label}</strong>
+      <strong className="what">{props.label}</strong>
+      {props.notes.length > 0 && (
+        <ul className="notes" aria-label={t("ui.timer.notes")}>
+          {props.notes.map((note, i) => (
+            <li key={`${i}-${note}`}>{note}</li>
+          ))}
+        </ul>
+      )}
       {props.stale && (
         <p role="alert">{t("ui.timer.stale", { date: props.startedOn, time: props.startedAt })}</p>
       )}
@@ -247,10 +316,10 @@ function StopForm(props: {
           </select>
         </label>
         <label className="grow">
-          {t("ui.entries.description")}
+          {props.notes.length > 0 ? t("ui.timer.last_note") : t("ui.entries.description")}
           <input
             autoFocus
-            required
+            required={props.notes.length === 0}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />

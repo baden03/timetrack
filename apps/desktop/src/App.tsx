@@ -8,6 +8,7 @@ import {
   type Project,
   type Rec,
 } from "./api";
+import { DarkContext, useIsDark } from "./colors";
 import { setLanguage, tError, t } from "./i18n";
 import { CommandError } from "./api";
 import { EntriesPage } from "./pages/EntriesPage";
@@ -85,6 +86,7 @@ export function App() {
   }, []);
 
   const theme = data?.state.settings.payload.theme ?? "system";
+  const dark = useIsDark(theme);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
@@ -96,6 +98,7 @@ export function App() {
   if (data.state.first_run) return <FirstRun onDone={reload} />;
 
   return (
+    <DarkContext.Provider value={dark}>
     <div className="shell">
       <a className="skip" href="#main">
         {t("ui.skip")}
@@ -147,5 +150,6 @@ export function App() {
         {page === "settings" && <SettingsPage data={data} reload={reload} />}
       </main>
     </div>
+    </DarkContext.Provider>
   );
 }
