@@ -488,3 +488,37 @@ fn dispatch_round_trip_and_errors() {
         "invalid_arguments"
     );
 }
+
+#[test]
+fn monthly_summary_is_billable_only_and_splits_at_month_end() {
+    let mut f = fixture();
+    // 31 Oct 23:00 to 1 Nov 01:00 contributes 1:00 to October and 1:00 to November.
+    f.app
+        .create_entry(interval(&f, "2026-10-31", "23:00", "01:00"))
+        .unwrap();
+    f.app
+        .create_entry(interval(&f, "2026-11-02", "09:00", "10:30"))
+        .unwrap();
+    let mut private = interval(&f, "2026-11-02", "11:00", "12:00");
+    private.billable = Some(false);
+    private.description = "Not billed".into();
+    f.app.create_entry(private).unwrap();
+
+    let nov = f.app.monthly_summary("2026-11").unwrap();
+    assert_eq!(nov.summary.minutes, 60 + 90);
+    assert!(nov.text.contains("TimeTrack summary — November 2026"));
+    assert!(nov.text.contains("ACME"));
+    assert!(!nov.text.contains("Not billed"));
+    let oct = f.app.monthly_summary("2026-10").unwrap();
+    assert_eq!(oct.summary.minutes, 60);
+    assert!(f
+        .app
+        .monthly_summary("2026-12")
+        .unwrap()
+        .text
+        .contains("No billable time"));
+    assert_eq!(
+        f.app.monthly_summary("nonsense").unwrap_err().code(),
+        "invalid_month"
+    );
+}

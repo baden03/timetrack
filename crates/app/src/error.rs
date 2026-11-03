@@ -36,6 +36,8 @@ pub enum AppError {
     CategoryNotEnabled,
     #[error("still referenced")]
     StillReferenced,
+    #[error("invalid month")]
+    InvalidMonth,
     #[error("unknown command")]
     UnknownCommand,
     #[error("invalid arguments")]
@@ -59,6 +61,7 @@ impl AppError {
             AppError::ClientArchived => "client_archived",
             AppError::CategoryNotEnabled => "category_not_enabled",
             AppError::StillReferenced => "still_referenced",
+            AppError::InvalidMonth => "invalid_month",
             AppError::UnknownCommand => "unknown_command",
             AppError::InvalidArguments => "invalid_arguments",
         }

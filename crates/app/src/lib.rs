@@ -6,7 +6,9 @@ mod dispatch;
 mod entries;
 mod error;
 mod service;
+mod summary;
 
 pub use entries::{EntryPatch, NewEntry, SavedEntry, Suggestion, Timing};
 pub use error::{AppError, Result};
 pub use service::{system_clock, App, AppState, Clock, Identity, ProjectInput};
+pub use summary::MonthlySummary;

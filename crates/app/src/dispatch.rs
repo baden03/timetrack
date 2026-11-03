@@ -88,6 +88,7 @@ impl<S: Store> App<S> {
                 &arg::<Id>(args, "project_id")?,
                 &arg::<String>(args, "date")?,
             )?),
+            "monthly_summary" => out(self.monthly_summary(&arg::<String>(args, "month")?)?),
             "history" => out(self.history(&arg::<Id>(args, "id")?)?),
             _ => Err(AppError::UnknownCommand),
         }

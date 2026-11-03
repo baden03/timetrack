@@ -11,6 +11,7 @@ import { tError, t } from "./i18n";
 import { CommandError } from "./api";
 import { EntriesPage } from "./pages/EntriesPage";
 import { FirstRun } from "./pages/FirstRun";
+import { SummaryPage } from "./pages/SummaryPage";
 import { SetupPage } from "./pages/SetupPage";
 import { SettingsPage } from "./pages/SettingsPage";
 
@@ -21,7 +22,7 @@ export interface Data {
   categories: Rec<Category>[];
 }
 
-type Page = "entries" | "setup" | "settings";
+type Page = "entries" | "summary" | "setup" | "settings";
 
 export function App() {
   const [data, setData] = useState<Data | null>(null);
@@ -60,7 +61,7 @@ export function App() {
     <div className="shell">
       <nav aria-label={t("ui.nav.label")}>
         <strong className="brand">{t("ui.app.name")}</strong>
-        {(["entries", "setup", "settings"] as Page[]).map((p) => (
+        {(["entries", "summary", "setup", "settings"] as Page[]).map((p) => (
           <button
             key={p}
             aria-current={page === p ? "page" : undefined}
@@ -72,6 +73,7 @@ export function App() {
       </nav>
       <main>
         {page === "entries" && <EntriesPage data={data} />}
+        {page === "summary" && <SummaryPage data={data} />}
         {page === "setup" && <SetupPage data={data} reload={reload} />}
         {page === "settings" && <SettingsPage data={data} reload={reload} />}
       </main>
