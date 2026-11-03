@@ -1,6 +1,6 @@
 # TimeTrack — Phased Rollout Plan
 
-**Status:** Working plan, updated 3 November 2026. **Release 1 (stand-alone) is built and in test use** (version 0.0.3, a pre-release on GitHub); Baden's real-use billing month, which closes it, has not happened yet. The sync spike and release 2 have not started. Section 10 records what has been delivered.
+**Status:** Working plan, updated 3 November 2026. **Release 1 (stand-alone) is built and its real-use month has started** (version 0.0.3, a pre-release on GitHub). From 3 November to about 3 December 2026 Baden records all his time in TimeTrack instead of the Google Doc, and Doug and Steffen use the same build from the quick-start guide. Feedback is collected as the month unfolds. The sync spike and release 2 have not started. Section 10 records what has been delivered.
 **Inputs:** [README.md](../README.md) (Concept v2), [architecture.md](architecture.md), and the scoping answers of 2 November 2026 (section 1).
 **Sizes** are relative (S, M, L, XL), not durations. No date or team size has been given, so this plan sequences by dependency and value. Turning sizes into a calendar needs the answer to open decision 8.
 
@@ -58,7 +58,7 @@ Concept v2 bundled stand-alone and one hub into its first milestone. These answe
 | Phase | Delivers | Who gains | Depends on | Size |
 |---|---|---|---|---|
 | **P0** Foundations | Repository, core skeleton, fixtures, storage, IDs | Developers | Decisions D1 to D4 | S to M | **Done** |
-| **R1** Stand-alone | Full time tracking on one Mac, monthly summary | Baden | P0 | L | **Built; in test use** (v0.0.3). Real-use month pending |
+| **R1** Stand-alone | Full time tracking on one Mac, monthly summary | Baden | P0 | L | **Built; real-use month running** (v0.0.3, started 3 Nov 2026, ends about 3 Dec) |
 | **S** Sync spike | Decision on the synchronization approach, scenario tests | Developers | A stable data model from R1 | M | Not started |
 | **R2** One hub | Accounts, sync, projects with members, summary across members | Baden, Doug, Steffen | R1, S | XL | Not started |
 | **R3** Invoice locks | Contributor and client invoice locks on hours | Baden, Doug, Steffen | R2 | M | Not started |
@@ -142,6 +142,23 @@ Concept v2 bundled stand-alone and one hub into its first milestone. These answe
 - The decision and the reasons are written down. The same scenarios become the conformance tests for release 2.
 
 **Gate.** Release 2 does not start before this is decided.
+
+**The spike in plain terms.**
+
+*The problem.* In release 2 each person has a copy of their data on their own Mac, and a hub (a small server) holds the shared copy. People work offline and reconnect later, so two copies of the same entry can change independently. The software that moves changes around, notices when two changes clash, and ends with every copy agreeing is called a **sync engine**. Getting this wrong loses hours or duplicates them, which in a billing tool is the worst failure.
+
+*Why a spike.* A spike is a short, throwaway experiment that answers one question so we do not guess. Here the question is: which way of building sync fits TimeTrack? Changing the answer after the hub is built would be very expensive, so we pay a small price now. Spike code is not shipped; the output is a decision and a document.
+
+*Step 1: write the scenarios as tests first.* Architecture §5 describes situations in words, for example: Doug and Baden edit the same entry offline (5.1); a removed collaborator reconnects with queued work (5.2); ownership moves while a device is offline (5.3); an invoice closes while someone's offline edit is still on its way (5.4). We turn each into an automated test with an exact expected outcome. These tests are the yardstick, and they are reused later as the acceptance tests for release 2.
+
+*Step 2: try the candidates against the same tests.*
+- **Custom operation log (Prototype A).** Every change is recorded as a small numbered operation ("set the end time of entry X"). Devices send their operations to the hub; the hub puts them in one order and sends back what each device is missing. We write all of this ourselves. It gives full control and matches our rules, but it is more code for us to own.
+- **PowerSync (Prototype B).** A ready-made engine with the same overall shape. We test whether it can express our rules (refusing a change, showing both versions side by side) and what it needs to run. Architecture §7.1 already records worries: its self-hosted server needs Postgres and MongoDB, and its Tauri and Rust pieces are alpha. It is in the comparison to test its model, not as the likely winner.
+- **Automerge or Loro (optional Prototype C).** Libraries that merge concurrent edits automatically (CRDTs). Automatic merging is the opposite of what we want for clashes, because we show both versions and let a person choose, and they do not enforce who may do what. Only worth building if A and B both disappoint.
+
+*Step 3: compare and decide.* For each candidate record: which scenarios passed, how heavy it is for one person to run as a hub, license fit, maturity, and how much of our permission logic ends up inside the engine. Write the recommendation and reasons in `docs/`, and note whether the R1 data model needs any change.
+
+*Rules for the spike.* It reads the existing R1 record model (IDs, revisions, authors, tombstones, history) and does not change the R1 app. If it shows the model needs a change, that goes in the write-up and is handled after the test month, so Baden's real data is never put at risk.
 
 ## R2 One hub
 
@@ -272,6 +289,7 @@ Concept open items still apply (README §22), especially #4 (password method) an
 
 # 9. Next steps
 
+0. **Now (from 3 November 2026): the real-use month.** Baden uses 0.0.3 in place of the Google Doc and collects feedback as the month unfolds. Doug and Steffen install from the link and the quick-start guide and report as they go. During the month, only bugs and blockers are fixed, in numbered builds, so the summary can be compared with the manual figures without a moving target. At the end of the month the eight R1 acceptance items are marked met or open, and the next round of work is chosen from the collected feedback.
 1. **Finish release 1.** Baden records a real billing month in TimeTrack and compares the summary with the manual figures. Check by hand on a real Mac the items listed under R1 (menu-bar text, shortcut, tray menu, About panel, backup and restore dialogs, Wi-Fi off, a restore on a second Mac). Doug and Steffen try the build and report on the timer and the flow.
 2. **Collect and act on feedback** as short rounds, as done so far; each round ends in a numbered test build.
 3. **Start the sync spike (S)** while the real-use month runs: write the architecture scenarios as tests, build the custom operation-log prototype and compare it with the alternatives (architecture §7.2). Decide the sync approach.
