@@ -1,6 +1,22 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "windows": ["main"],
-  "permissions": ["core:default", "dialog:default"]
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://github.com/baden03/timetrack"
+        },
+        {
+          "url": "https://github.com/baden03/timetrack/*"
+        }
+      ]
+    }
+  ]
 }

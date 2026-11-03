@@ -220,5 +220,14 @@
   "tray.show": "Show TimeTrack",
   "tray.start": "Start timer",
   "tray.stop": "Stop timer",
-  "tray.quit": "Quit TimeTrack"
+  "tray.quit": "Quit TimeTrack",
+  "ui.nav.about": "About",
+  "ui.about.title": "About TimeTrack",
+  "ui.about.tagline": "Simple tool to track time on large projects.",
+  "ui.about.version_label": "Version",
+  "ui.about.source_label": "Source code",
+  "ui.about.license_label": "License",
+  "ui.about.license": "Open source under the Apache License 2.0.",
+  "ui.about.copyright": "© {year} {holder}",
+  "ui.about.local_only": "Your time stays on this computer. TimeTrack makes no network connections, unless you want to connect to a hub."
 }

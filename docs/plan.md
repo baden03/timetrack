@@ -202,6 +202,12 @@ Built when the group needs it, or when a fourth person joins.
 
 Unordered. Candidates: rates and values (concept §10), a reporting module, CSV export, the XML import add-on, additional UI languages (German first), the public API.
 
+**Check for updates** (requested 3 November 2026, on the About screen). Release 1 makes no network connection at all, and `scripts/no-network.sh` enforces that, so this needs a deliberate decision when it is built:
+- It must be an opt-in button (concept §16.1), never a background check, and the only connection the app makes.
+- Updates must be signed (Tauri's updater uses its own signing key, kept off the repository) and hosted somewhere stable, for example GitHub Releases.
+- macOS will only let a downloaded update run smoothly if the app is signed with an Apple developer certificate and notarized; the current ad-hoc signature is not enough.
+- The guard script and the content security policy get one explicit, documented exception for the update address.
+
 ## Later
 
 Windows, Linux and phone clients. Hosted hubs. Independent hubs and federation (concept phases 3 and 4).

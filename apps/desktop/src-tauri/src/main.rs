@@ -14,7 +14,7 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use serde_json::{json, Value};
-use tauri::menu::{Menu, MenuItem};
+use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
 use tauri::Wry;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
@@ -104,21 +104,90 @@ fn running_since(app: &AppHandle) -> Option<DateTime<Utc>> {
         .ok()
 }
 
+const REPOSITORY_URL: &str = "https://github.com/baden03/timetrack";
+
+/// The interface language chosen in Settings (English if it cannot be read).
+fn settings_language(app: &AppHandle) -> String {
+    let state = app.state::<AppState>();
+    let Ok(mut service) = state.0.lock() else {
+        return "en".into();
+    };
+    let Ok(settings) = service.dispatch("state", &json!({})) else {
+        return "en".into();
+    };
+    settings["settings"]["payload"]["language"]
+        .as_str()
+        .unwrap_or("en")
+        .to_owned()
+}
+
+/// The application menu, with an About panel that says what TimeTrack is and
+/// where its source lives. The text follows the language at start-up.
+fn build_app_menu<M: Manager<Wry>>(app: &M, language: &str) -> tauri::Result<Menu<Wry>> {
+    let tagline = Catalog::for_language(language)
+        .text("ui.about.tagline")
+        .to_owned();
+    let about = AboutMetadata {
+        name: Some("TimeTrack".into()),
+        version: Some(env!("CARGO_PKG_VERSION").into()),
+        copyright: Some("© 2026 Twinpictures".into()),
+        comments: Some(tagline.clone()),
+        credits: Some(format!("{tagline}\n{REPOSITORY_URL}")),
+        website: Some(REPOSITORY_URL.into()),
+        website_label: Some("GitHub".into()),
+        license: Some("Apache-2.0".into()),
+        ..Default::default()
+    };
+    // Quit is our own item: the window only hides when closed, and the app
+    // must still end when the person asks it to.
+    let quit = MenuItem::with_id(app, "app-quit", "Quit TimeTrack", true, Some("CmdOrCtrl+Q"))?;
+    let app_menu = Submenu::with_items(
+        app,
+        "TimeTrack",
+        true,
+        &[
+            &PredefinedMenuItem::about(app, Some("About TimeTrack"), Some(about))?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::services(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::hide(app, None)?,
+            &PredefinedMenuItem::hide_others(app, None)?,
+            &PredefinedMenuItem::show_all(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &quit,
+        ],
+    )?;
+    let edit = Submenu::with_items(
+        app,
+        "Edit",
+        true,
+        &[
+            &PredefinedMenuItem::undo(app, None)?,
+            &PredefinedMenuItem::redo(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::cut(app, None)?,
+            &PredefinedMenuItem::copy(app, None)?,
+            &PredefinedMenuItem::paste(app, None)?,
+            &PredefinedMenuItem::select_all(app, None)?,
+        ],
+    )?;
+    let window = Submenu::with_items(
+        app,
+        "Window",
+        true,
+        &[
+            &PredefinedMenuItem::minimize(app, None)?,
+            &PredefinedMenuItem::maximize(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::close_window(app, None)?,
+        ],
+    )?;
+    Menu::with_items(app, &[&app_menu, &edit, &window])
+}
+
 /// Reads the interface language from the settings and retitles the tray menu.
 fn refresh_tray_language(app: &AppHandle) {
-    let language = {
-        let state = app.state::<AppState>();
-        let Ok(mut service) = state.0.lock() else {
-            return;
-        };
-        let Ok(settings) = service.dispatch("state", &json!({})) else {
-            return;
-        };
-        settings["settings"]["payload"]["language"]
-            .as_str()
-            .unwrap_or("en")
-            .to_owned()
-    };
+    let language = settings_language(app);
     let menu = app.state::<TrayMenu>();
     let catalog = Catalog::for_language(&language);
     let _ = menu.show.set_text(catalog.text("tray.show"));
@@ -177,7 +246,11 @@ fn main() {
 
     let built = tauri::Builder::default()
         .plugin(plugin)
+        // Set before the window exists, so the menu bar is ours from the start;
+        // setup then rebuilds it once the language is known.
+        .menu(|handle| build_app_menu(handle, "en"))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![call])
         // Closing the window hides it: the timer, the menu bar and the
         // shortcut keep working, and the window can be shown again.
@@ -206,6 +279,14 @@ fn main() {
                 language: Mutex::new("en".into()),
             });
             refresh_tray_language(app.handle());
+
+            let language = settings_language(app.handle());
+            app.set_menu(build_app_menu(app, &language)?)?;
+            app.on_menu_event(|app, event| {
+                if event.id().as_ref() == "app-quit" {
+                    app.exit(0);
+                }
+            });
             let icon = app.default_window_icon().cloned().ok_or("no window icon")?;
             TrayIconBuilder::with_id("main")
                 .icon(icon)
