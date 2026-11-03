@@ -3612,6 +3612,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-global-shortcut",
  "timetrack-app",
+ "timetrack-core",
  "timetrack-storage",
 ]
 

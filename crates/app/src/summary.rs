@@ -80,7 +80,12 @@ impl<S: Store> App<S> {
             });
         }
         let summary = build(&entries);
-        let text = summary.to_text(&Catalog::english(), first.year(), first.month());
+        let language = self.settings_value()?.language;
+        let text = summary.to_text(
+            &Catalog::for_language(&language),
+            first.year(),
+            first.month(),
+        );
         Ok(MonthlySummary { summary, text })
     }
 

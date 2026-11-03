@@ -40,7 +40,7 @@ export function useBackup(reload: () => Promise<void>, settings?: Data["state"][
       if (!path) return null;
       const info = await call<BackupInfo>("backup", { path });
       await reload();
-      return t("ui.backup.done", { records: info.records, path });
+      return t("ui.backup.done", { count: info.records, path });
     });
 
   const restoreFromFile = () =>
@@ -49,7 +49,7 @@ export function useBackup(reload: () => Promise<void>, settings?: Data["state"][
       if (!path) return null;
       const info = await call<BackupInfo>("inspect_backup", { path });
       const ok = await dialogs.confirm(
-        t("ui.backup.restore_confirm", { records: info.records, history: info.history_entries }),
+        t("ui.backup.restore_confirm", { count: info.records }),
       );
       if (!ok) return null;
       await call("restore", { path });

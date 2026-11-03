@@ -44,6 +44,8 @@ pub enum AppError {
     NoTimer,
     #[error("nothing to repeat")]
     NothingToRepeat,
+    #[error("unsupported language")]
+    UnsupportedLanguage,
     #[error("invalid month")]
     InvalidMonth,
     #[error("unknown command")]
@@ -73,6 +75,7 @@ impl AppError {
             AppError::TimerTooShort => "timer_too_short",
             AppError::NoTimer => "no_timer",
             AppError::NothingToRepeat => "nothing_to_repeat",
+            AppError::UnsupportedLanguage => "unsupported_language",
             AppError::InvalidMonth => "invalid_month",
             AppError::UnknownCommand => "unknown_command",
             AppError::InvalidArguments => "invalid_arguments",

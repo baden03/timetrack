@@ -40,3 +40,8 @@ ditto -c -k --keepParent apps/desktop/src-tauri/target/release/bundle/macos/Time
 
 ## Checks
 `scripts/check.sh` runs everything CI runs: formatting, clippy, all Rust tests, the desktop shell's tests, the UI type check and tests, and `scripts/no-network.sh`, which keeps release 1 free of network use.
+
+## Languages
+Every piece of user-visible text lives in `i18n/<code>.json` (English `en` is the base; German `de` uses the informal "du"). Messages with a number use `key.one` and `key.other` and a `{count}` parameter. A message missing in a language falls back to English, and a test fails if a language lacks a key or changes its `{placeholders}`.
+
+How to add a language, with the rules and a checklist for translators, is in [docs/translating.md](docs/translating.md). Registering one takes a line in `crates/core/src/i18n.rs` and a line in `apps/desktop/src/i18n.ts`. The Settings page, the monthly summary text and the menu-bar menu follow the language chosen in Settings.

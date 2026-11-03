@@ -637,3 +637,41 @@ fn category_is_optional_and_can_be_added_or_removed_later() {
     let nov = f.app.monthly_summary("2026-11").unwrap();
     assert!(nov.text.contains("Uncategorized — 1:00"));
 }
+
+#[test]
+fn language_setting_is_validated_and_drives_the_summary_text() {
+    let mut f = fixture();
+    f.app
+        .create_entry(interval(&f, "2026-11-02", "09:00", "10:00"))
+        .unwrap();
+    let mut loose = interval(&f, "2026-11-02", "11:00", "12:00");
+    loose.category_id = None;
+    f.app.create_entry(loose).unwrap();
+    let mut settings: timetrack_core::model::Settings =
+        serde_json::from_value(f.app.state().unwrap().settings.payload).unwrap();
+
+    settings.language = "xx".into();
+    assert_eq!(
+        f.app.update_settings(settings.clone()).unwrap_err().code(),
+        "unsupported_language"
+    );
+
+    settings.language = "de".into();
+    f.app.update_settings(settings.clone()).unwrap();
+    let text = f.app.monthly_summary("2026-11").unwrap().text;
+    assert!(
+        text.contains("TimeTrack-Auswertung — November 2026"),
+        "{text}"
+    );
+    assert!(text.contains("Ohne Kategorie — 1:00"), "{text}");
+    assert!(text.contains("Gesamtsumme: 2:00"), "{text}");
+
+    settings.language = "en".into();
+    f.app.update_settings(settings).unwrap();
+    assert!(f
+        .app
+        .monthly_summary("2026-11")
+        .unwrap()
+        .text
+        .contains("TimeTrack summary — November 2026"));
+}

@@ -16,13 +16,24 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
+use tauri::Wry;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use timetrack_app::{system_clock, App};
+use timetrack_core::i18n::Catalog;
 use timetrack_storage::SqliteStore;
 
 /// The service and the folder the data lives in.
 struct AppState(Mutex<App<SqliteStore>>, PathBuf);
+
+/// The tray menu entries, kept so their text can follow the language chosen
+/// in Settings (and the running state, for the start/stop entry).
+struct TrayMenu {
+    show: MenuItem<Wry>,
+    toggle: MenuItem<Wry>,
+    quit: MenuItem<Wry>,
+    language: Mutex<String>,
+}
 
 #[derive(Serialize)]
 struct CommandError {
@@ -64,6 +75,11 @@ fn call(
     if result.is_ok() && (TIMER_CHANGES.contains(&command.as_str()) || command == "restore") {
         let _ = app_handle.emit("timer-changed", ());
     }
+    if result.is_ok()
+        && ["update_settings", "restore", "finish_first_run"].contains(&command.as_str())
+    {
+        refresh_tray_language(&app_handle);
+    }
     result
 }
 
@@ -86,6 +102,32 @@ fn running_since(app: &AppHandle) -> Option<DateTime<Utc>> {
         .or_else(|| payload["start_at"].as_str())?
         .parse::<DateTime<Utc>>()
         .ok()
+}
+
+/// Reads the interface language from the settings and retitles the tray menu.
+fn refresh_tray_language(app: &AppHandle) {
+    let language = {
+        let state = app.state::<AppState>();
+        let Ok(mut service) = state.0.lock() else {
+            return;
+        };
+        let Ok(settings) = service.dispatch("state", &json!({})) else {
+            return;
+        };
+        settings["settings"]["payload"]["language"]
+            .as_str()
+            .unwrap_or("en")
+            .to_owned()
+    };
+    let menu = app.state::<TrayMenu>();
+    let catalog = Catalog::for_language(&language);
+    let _ = menu.show.set_text(catalog.text("tray.show"));
+    let _ = menu.quit.set_text(catalog.text("tray.quit"));
+    let mut current = match menu.language.lock() {
+        Ok(current) => current,
+        Err(_) => return,
+    };
+    *current = language;
 }
 
 fn show_window(app: &AppHandle) {
@@ -153,15 +195,17 @@ fn main() {
             let service = App::open(store, &zone, system_clock())?;
             app.manage(AppState(Mutex::new(service), dir));
 
+            let show_item = MenuItem::with_id(app, "show", "Show TimeTrack", true, None::<&str>)?;
             let toggle_item = MenuItem::with_id(app, "toggle", "Start timer", true, None::<&str>)?;
-            let menu = Menu::with_items(
-                app,
-                &[
-                    &MenuItem::with_id(app, "show", "Show TimeTrack", true, None::<&str>)?,
-                    &toggle_item,
-                    &MenuItem::with_id(app, "quit", "Quit TimeTrack", true, None::<&str>)?,
-                ],
-            )?;
+            let quit_item = MenuItem::with_id(app, "quit", "Quit TimeTrack", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_item, &toggle_item, &quit_item])?;
+            app.manage(TrayMenu {
+                show: show_item,
+                toggle: toggle_item,
+                quit: quit_item,
+                language: Mutex::new("en".into()),
+            });
+            refresh_tray_language(app.handle());
             let icon = app.default_window_icon().cloned().ok_or("no window icon")?;
             TrayIconBuilder::with_id("main")
                 .icon(icon)
@@ -185,7 +229,7 @@ fn main() {
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 let mut shown: Option<String> = None;
-                let mut was_running: Option<bool> = None;
+                let mut menu_shown: Option<(bool, String)> = None;
                 loop {
                     let since = running_since(&handle);
                     let title = since.map(|s| elapsed_title(s, Utc::now()));
@@ -199,13 +243,13 @@ fn main() {
                         shown = title;
                     }
                     let running = since.is_some();
-                    if was_running != Some(running) {
-                        let _ = toggle_item.set_text(if running {
-                            "Stop timer"
-                        } else {
-                            "Start timer"
-                        });
-                        was_running = Some(running);
+                    let menu = handle.state::<TrayMenu>();
+                    let language = menu.language.lock().map(|l| l.clone()).unwrap_or_default();
+                    if menu_shown.as_ref() != Some(&(running, language.clone())) {
+                        let catalog = Catalog::for_language(&language);
+                        let key = if running { "tray.stop" } else { "tray.start" };
+                        let _ = menu.toggle.set_text(catalog.text(key));
+                        menu_shown = Some((running, language));
                     }
                     let wait = match since {
                         Some(s) => {
