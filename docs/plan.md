@@ -1,6 +1,6 @@
 # TimeTrack — Phased Rollout Plan
 
-**Status:** Draft. The scope changes in section 2 were confirmed on 3 November 2026. The rest is not yet approved.
+**Status:** Working plan, updated 3 November 2026. **Release 1 (stand-alone) is built and in test use** (version 0.0.3, a pre-release on GitHub); Baden's real-use billing month, which closes it, has not happened yet. The sync spike and release 2 have not started. Section 10 records what has been delivered.
 **Inputs:** [README.md](../README.md) (Concept v2), [architecture.md](architecture.md), and the scoping answers of 2 November 2026 (section 1).
 **Sizes** are relative (S, M, L, XL), not durations. No date or team size has been given, so this plan sequences by dependency and value. Turning sizes into a calendar needs the answer to open decision 8.
 
@@ -23,7 +23,7 @@
 
 ---
 
-# 2. Scope changes against Concept v2 (to confirm)
+# 2. Scope changes against Concept v2 (confirmed 3 November 2026)
 
 Concept v2 bundled stand-alone and one hub into its first milestone. These answers allow a smaller, earlier first release.
 
@@ -57,14 +57,14 @@ Concept v2 bundled stand-alone and one hub into its first milestone. These answe
 
 | Phase | Delivers | Who gains | Depends on | Size |
 |---|---|---|---|---|
-| **P0** Foundations | Repository, core skeleton, fixtures, storage, IDs | Developers | Decisions D1 to D4 | S to M |
-| **R1** Stand-alone | Full time tracking on one Mac, monthly summary | Baden | P0 | L |
-| **S** Sync spike | Decision on the synchronization approach, scenario tests | Developers | A stable data model from R1 | M |
-| **R2** One hub | Accounts, sync, projects with members, summary across members | Baden, Doug, Steffen | R1, S | XL |
-| **R3** Invoice locks | Contributor and client invoice locks on hours | Baden, Doug, Steffen | R2 | M |
-| **R4** Authority and roles | Project manager, overrides, ownership transfer, amendments, zone-change split | As needed | R3 | M to L |
-| **R5** Reporting and more | Rates, reporting module, XML import, translations, API | As needed | R3 | Open |
-| Later | Windows, Linux, phone, hosted hubs, federation | | | |
+| **P0** Foundations | Repository, core skeleton, fixtures, storage, IDs | Developers | Decisions D1 to D4 | S to M | **Done** |
+| **R1** Stand-alone | Full time tracking on one Mac, monthly summary | Baden | P0 | L | **Built; in test use** (v0.0.3). Real-use month pending |
+| **S** Sync spike | Decision on the synchronization approach, scenario tests | Developers | A stable data model from R1 | M | Not started |
+| **R2** One hub | Accounts, sync, projects with members, summary across members | Baden, Doug, Steffen | R1, S | XL | Not started |
+| **R3** Invoice locks | Contributor and client invoice locks on hours | Baden, Doug, Steffen | R2 | M | Not started |
+| **R4** Authority and roles | Project manager, overrides, ownership transfer, amendments, zone-change split | As needed | R3 | M to L | Not started |
+| **R5** Reporting and more | Rates, reporting module, XML import, more translations, API, update check | As needed | R3 | Open | German done early (see R1); the rest not started |
+| Later | Windows, Linux, phone, hosted hubs, federation | | | | |
 
 ```
  P0 ──► R1 ─────────────────► R2 ──► R3 ──► R4
@@ -104,13 +104,18 @@ Concept v2 bundled stand-alone and one hub into its first milestone. These answe
 - Time entries in this order of attention: start and end, live timer, duration only. Description required. Billable flag. Tags (free-form).
 - Midnight split performed by the client, with each entry's zone and offsets recorded.
 - Row-level editing in the list (Enter saves, Esc cancels). Day and week views over a 60-day default window; search over all entries.
-- Hours as hh:mm. Preferences: date format, 24-hour clock, language (English).
+- Hours as hh:mm. Preferences: date format, 24-hour clock, language (English and German), theme, backup reminder.
 - Stale-timer prompt as the only notification.
 - Append-only change history.
 - Backup and restore.
 - **Monthly summary:** for a chosen month, per client and project, by category: total hours and the list of descriptions. Copy as plain text.
 
 **Not included.** Hub, sync, rates and values, invoice locks, import.
+
+**Status (3 November 2026).** All the scope above is built, plus additions that came out of testing (listed in section 10). The eight acceptance criteria stand as follows; the evidence for each is in [dev-plan-p0-r1.md](dev-plan-p0-r1.md), section 9.
+- **Met by tests:** 3 (fixtures and daylight saving), 6 (timer survives a crash), 7 (history), 8 (summary totals), and the data side of 5 (backup then restore reproduces records and history exactly).
+- **Needs a person at a real Mac:** 1 (Baden's real billing month), 2 (running with Wi-Fi off; the code and checks already rule out network use), 4 (keyboard use, verified in a browser; repeat in the built app) and the second-Mac half of 5.
+- **Also not yet seen on a real desktop:** the menu-bar text, the Cmd+Shift+T shortcut, the tray menu, the macOS About panel and the native file dialogs for backup and restore.
 
 **Acceptance.**
 1. Baden records a full billing month in TimeTrack instead of the Google Doc, and the summary matches the manual figures.
@@ -200,7 +205,7 @@ Built when the group needs it, or when a fourth person joins.
 
 ## R5 Reporting, rates and extras
 
-Unordered. Candidates: rates and values (concept §10), a reporting module, CSV export, the XML import add-on, additional UI languages (German first), the public API.
+Unordered. Candidates: rates and values (concept §10), a reporting module, CSV export, the XML import add-on, more UI languages (German is done and [translating.md](translating.md) explains how to add others; languages that need more than two plural forms need a small extension), the public API.
 
 **Check for updates** (requested 3 November 2026, on the About screen). Release 1 makes no network connection at all, and `scripts/no-network.sh` enforces that, so this needs a deliberate decision when it is built:
 - It must be an opt-in button (concept §16.1), never a background check, and the only connection the app makes.
@@ -220,7 +225,7 @@ Windows, Linux and phone clients. Hosted hubs. Independent hubs and federation (
 |---|---|
 | Testing | Fixtures from the concept; the walk-throughs as scenario tests; property tests for splits; a shared validator run by client and hub. |
 | Security | TLS, access control, encrypted backups, logs without descriptions or rates, protocol versioning. |
-| Localization | Message catalogs from P0. |
+| Localization | Message catalogs from P0. English and German are complete, with a test that keeps every language in step. |
 | Operations | Operator guide, backup and restore procedure, upgrade procedure. |
 | Migration | Schema versions in the app; protocol versions between app and hub. |
 
@@ -230,18 +235,21 @@ Windows, Linux and phone clients. Hosted hubs. Independent hubs and federation (
 
 | # | Decision | Needed by | Recommendation |
 |---|---|---|---|
-| D1 | Confirm Tauri with a TypeScript interface | P0 | Yes |
-| D2 | Open-source license (check against any sync engine's license) | P0 | Decide with the repository |
-| D3 | Repository layout (one workspace) | P0 | One workspace |
-| D4 | ID and clock scheme for time-ordered, never-reused IDs | P0 | Decide in P0 with a short note |
-| D5 | Monthly summary format | R1 | Plain text grouped by client, project, category; descriptions as lines |
-| D6 | Menu-bar timer and global shortcut in R1 | R1 | Yes, because Doug will use a timer |
-| D7 | Passkey page approach and library | R2 | Decide after the spike |
-| D8 | Who builds and how many hours per week | Plan to calendar | Needed from you |
-| D9 | Hub packaging, storage and TLS | R2 | Architecture 5.9, questions 3 and 4 |
+| D1 | Confirm Tauri with a TypeScript interface | P0 | **Decided: yes.** React UI over the Rust core; the menu-bar timer and shortcut worked in the P0 spike |
+| D2 | Open-source license (check against any sync engine's license) | P0 | **Decided: Apache-2.0.** Re-check when a sync engine is chosen |
+| D3 | Repository layout (one workspace) | P0 | **Decided:** Rust workspace (`core`, `storage`, `app`, `hub` placeholder) plus the desktop app |
+| D4 | ID and clock scheme for time-ordered, never-reused IDs | P0 | **Decided:** UUID v7 with an origin suffix; see [ids-and-clocks.md](ids-and-clocks.md) |
+| D5 | Monthly summary format | R1 | **Decided:** see [summary-format.md](summary-format.md) (billable only; bullet descriptions are one line each) |
+| D6 | Menu-bar timer and global shortcut in R1 | R1 | **Decided: yes, built** |
+| D7 | Passkey page approach and library | R2 | Open; decide after the spike |
+| D8 | Who builds and how many hours per week | Plan to calendar | **Decided:** Baden and Claude build; Doug and Steffen test. Hours per week still not stated, so sizes remain relative |
+| D9 | Hub packaging, storage and TLS | R2 | Open; architecture 5.9, questions 3 and 4 |
 | D10 | Scope changes in section 2 | Now | **Confirmed** (3 November 2026) |
+| D11 | Check for updates in the app | After R1 | Open. Needs an opt-in button, signed updates and an Apple developer certificate with notarization; see the R5 note |
+| D12 | Apple developer signing and notarization, and an Intel or universal build | Before wider testing | Open. Builds are ad-hoc signed for Apple Silicon only; testers use right-click, Open once |
+| D13 | Continuous integration | Done | **Decided:** runs by hand and on a version tag, not on every push; the macOS desktop job is manual because GitHub's Apple Silicon runners are often at capacity. `scripts/check.sh` runs the same checks locally |
 
-Decided 3 November 2026: D1 (Tauri), D2 (Apache-2.0 or MIT), D3, D4, D5, D6 (menu-bar timer in R1). D8: Baden and Claude build; Doug and Steffen test. Task breakdown for P0 and R1: [dev-plan-p0-r1.md](dev-plan-p0-r1.md).
+Task breakdown for P0 and R1, with the acceptance evidence: [dev-plan-p0-r1.md](dev-plan-p0-r1.md).
 
 Concept open items still apply (README §22), especially #4 (password method) and #26 (rate for a staying former owner, which moves to R5 with rates).
 
@@ -254,6 +262,8 @@ Concept open items still apply (README §22), especially #4 (password method) an
 | Synchronization is harder than expected | Release 2 slips | The spike comes first. Scenario tests are written before the hub. |
 | Sync-ready data model is skipped in R1 | Migration pain in R2 | P0 sets the record model; R1 acceptance includes history and revisions. |
 | Passkey page proves heavy for a small hub | Sign-in blocks release 2 | Prototype in the spike. Keep the page minimal. |
+| GitHub macOS runners are often at capacity | Remote checks wait or fail | Checks run locally (`scripts/check.sh`) before a release; the desktop CI job is manual (D13). |
+| Builds are not notarized and are Apple Silicon only | Testers need a Gatekeeper workaround; Intel Macs cannot run it | Install note; decide D12 before wider testing. |
 | Scope creep in R1 from hub concerns | R1 delayed | Hub items listed as not included. |
 | Time-zone edge cases | Wrong dates | Recorded offsets and shared fixtures; zone-change split deferred. |
 | Single operator | Outages, lost backups | Documented backup and restore, tested in R2 acceptance. |
@@ -262,7 +272,25 @@ Concept open items still apply (README §22), especially #4 (password method) an
 
 # 9. Next steps
 
-1. Confirm the scope changes in section 2 (D10).
-2. Decide D1 to D4 and start P0.
-3. Answer D8 so the sizes can become a calendar.
-4. Continue the create-a-hub deep dive (architecture 5.9) in time for release 2.
+1. **Finish release 1.** Baden records a real billing month in TimeTrack and compares the summary with the manual figures. Check by hand on a real Mac the items listed under R1 (menu-bar text, shortcut, tray menu, About panel, backup and restore dialogs, Wi-Fi off, a restore on a second Mac). Doug and Steffen try the build and report on the timer and the flow.
+2. **Collect and act on feedback** as short rounds, as done so far; each round ends in a numbered test build.
+3. **Start the sync spike (S)** while the real-use month runs: write the architecture scenarios as tests, build the custom operation-log prototype and compare it with the alternatives (architecture §7.2). Decide the sync approach.
+4. **Decide the open items for release 2:** D7 (passkey page), D9 (hub packaging, storage, TLS), and, before wider testing, D12 (signing, notarization, Intel).
+5. **Break release 2 into tasks** the way P0 and R1 were, once the spike has decided.
+6. **Later in release 1's life:** decide D11 (the update check) and write it as a deliberate exception to the no-network rule.
+
+---
+
+# 10. Delivered so far
+
+Releases are pre-releases on GitHub, built on Apple Silicon Macs and signed ad hoc.
+
+| Version | Date | What it added |
+|---|---|---|
+| 0.0.1 | 3 Nov 2026 | The first complete stand-alone build: clients, projects, categories (optional on an entry); a dashboard of project cards and a project page; entries by start and end, timer or duration; midnight split with time zones; menu-bar timer and Cmd+Shift+T, kept in step with the window; week view, search, history; monthly summary; backup and restore with a reminder; date and time formats and checks on leaving a field; light and dark themes; keyboard use; no network use. |
+| 0.0.2 | 3 Nov 2026 | German interface (informal), a language setting, the About screen, an icon with transparent corners. |
+| 0.0.3 | 3 Nov 2026 | Notes added while a timer runs (bullet points of the entry); descriptions typed a line at a time; category defaults to the last used; colors for clients and projects; end times up to 15 minutes ahead; duration shorthand (`:45`, `.75`, `1h30`); tidier lists (no Tags column, tags after the description, "Time" header) and form controls of one height. |
+
+**Added beyond the original R1 scope, from testing feedback:** the dashboard and project page, an optional category, running notes with bullet descriptions, colors, the 15-minute allowance, duration and date and time shorthand with checks on leaving a field, German, the About screen, the CI change, and a quick-start guide.
+
+**Documents:** [quick-start.md](quick-start.md) (setting up a new install), [install-macos.md](install-macos.md) (installing the build), [translating.md](translating.md) (adding a language), [summary-format.md](summary-format.md), [ids-and-clocks.md](ids-and-clocks.md), [spike-tauri.md](spike-tauri.md).
