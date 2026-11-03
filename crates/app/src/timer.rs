@@ -13,14 +13,15 @@ use timetrack_core::record::Record;
 use timetrack_core::time::{local_date, local_to_utc, TimeError};
 use timetrack_storage::Store;
 
-use crate::entries::{kind_of_interval, SavedEntry};
+use crate::entries::{double_option, kind_of_interval, SavedEntry};
 use crate::error::{AppError, Result};
 use crate::service::{payload, App};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct StartTimer {
     pub project_id: Id,
-    pub category_id: Id,
+    #[serde(default)]
+    pub category_id: Option<Id>,
     #[serde(default)]
     pub description: String,
     #[serde(default)]
@@ -36,6 +37,9 @@ pub struct StopTimer {
     /// not later than the start). Without it the timer stops now.
     pub end_time: Option<String>,
     pub tags: Option<Vec<String>>,
+    /// Absent: keep the timer's category. `null`: no category.
+    #[serde(default, deserialize_with = "double_option")]
+    pub category_id: Option<Option<Id>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -75,7 +79,7 @@ impl<S: Store> App<S> {
         if self.current_timer()?.is_some() {
             return Err(AppError::TimerRunning);
         }
-        self.check_refs(&new.project_id, &new.category_id)?;
+        self.check_refs(&new.project_id, new.category_id.as_ref())?;
         let timer = Timer {
             project_id: new.project_id,
             category_id: new.category_id,
@@ -83,6 +87,7 @@ impl<S: Store> App<S> {
             billable: new.billable,
             tags: normalize_tags(&new.tags)?,
             start_at: to_minute(self.now()),
+            exact_start_at: Some(self.now()),
             timezone: self.settings_value()?.timezone,
         };
         self.create(KIND_TIMER, &timer)
@@ -129,7 +134,8 @@ impl<S: Store> App<S> {
         let t: Timer = payload(&rec)?;
         let description = require_description(&stop.description)?;
         let zone: Tz = t.timezone.parse().map_err(|_| AppError::UnknownTimeZone)?;
-        let project = self.check_refs(&t.project_id, &t.category_id)?.0;
+        let category_id = stop.category_id.clone().unwrap_or(t.category_id.clone());
+        let project = self.check_refs(&t.project_id, category_id.as_ref())?;
 
         let end_at = match &stop.end_time {
             None => to_minute(self.now()),
@@ -147,12 +153,16 @@ impl<S: Store> App<S> {
                 local_to_utc(end, zone)?
             }
         };
+        if stop.end_time.is_none() && end_at <= t.start_at {
+            // Entries are whole minutes; the person can keep going or discard.
+            return Err(AppError::TimerTooShort);
+        }
         let specs = self.specs_from_instants(t.start_at, end_at, zone)?;
         let overlaps = self.find_overlaps(&specs, None)?;
 
         let base = TimeEntry {
             project_id: t.project_id,
-            category_id: t.category_id,
+            category_id,
             description,
             billable: t.billable.unwrap_or(project.billable_default),
             tags: match stop.tags {

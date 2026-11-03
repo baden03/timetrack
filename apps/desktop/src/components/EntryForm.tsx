@@ -2,25 +2,33 @@ import { useEffect, useRef, useState } from "react";
 import { call, type SavedEntry, type Suggestion, type Timing } from "../api";
 import type { Data } from "../App";
 import { ErrorLine, errorText } from "./Errors";
-import { t } from "../i18n";
-import { parseHhmm } from "../time";
+import { t, tError } from "../i18n";
+import { displayDate, formatClock, parseClock, parseDate, parseHhmm } from "../time";
+import { DateInput, TimeInput } from "./FormatInputs";
 
 export function EntryForm({
   data,
   today,
   onSaved,
+  fixedProjectId,
 }: {
   data: Data;
   today: string;
   onSaved: () => Promise<void>;
+  /** On a project page the project is given, not chosen. */
+  fixedProjectId?: string;
 }) {
+  const settings = data.state.settings.payload;
   const projects = data.projects.filter((p) => p.payload.status === "active");
   const clientName = (id: string) => data.clients.find((c) => c.id === id)?.payload.name ?? "";
 
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
+  const [chosenProject, setProjectId] = useState(projects[0]?.id ?? "");
+  const projectId = fixedProjectId ?? chosenProject;
   const [categoryId, setCategoryId] = useState("");
   const [mode, setMode] = useState<"interval" | "duration">("interval");
-  const [date, setDate] = useState(today);
+  // The date and times are kept as typed and read when the form is submitted.
+  const [dateText, setDateText] = useState(displayDate(today, settings.date_format));
+  const date = parseDate(dateText, settings.date_format);
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [duration, setDuration] = useState("");
@@ -37,26 +45,30 @@ export function EntryForm({
   );
 
   // Smart defaults (concept §8.6): the previous entry's end and the last category.
-  const suggestFor = async (pid: string, d: string, force: boolean) => {
-    if (!pid) return;
+  const suggestFor = async (pid: string, d: string | null) => {
+    if (!pid || !d) return;
     const s = await call<Suggestion>("suggest", { project_id: pid, date: d });
-    if (force || !start) setStart(s.start ?? "");
+    setStart(s.start ? formatClock(s.start, settings.clock_24h) : "");
     const enabled = data.projects.find((p) => p.id === pid)?.payload.category_ids ?? [];
-    const pick = s.category_id && enabled.includes(s.category_id) ? s.category_id : enabled[0];
-    if (pick) setCategoryId(pick);
+    // No category is fine; the last one used on the project is proposed.
+    setCategoryId(s.category_id && enabled.includes(s.category_id) ? s.category_id : "");
   };
 
   useEffect(() => {
-    void suggestFor(projectId, date, true);
+    void suggestFor(projectId, date);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, date]);
 
   if (projects.length === 0) return <p className="muted">{t("ui.entries.need_project")}</p>;
 
   const submit = async () => {
+    if (date === null) return setError(tError("invalid_date_time"));
     let timing: Timing;
     if (mode === "interval") {
-      timing = { mode, date, start, end };
+      const from = parseClock(start);
+      const to = parseClock(end);
+      if (from === null || to === null) return setError(tError("invalid_date_time"));
+      timing = { mode, date, start: from, end: to };
     } else {
       const minutes = parseHhmm(duration);
       if (minutes === null) return setError(t("error.duration_out_of_range"));
@@ -66,7 +78,7 @@ export function EntryForm({
       const saved = await call<SavedEntry>("create_entry", {
         entry: {
           project_id: projectId,
-          category_id: categoryId,
+          category_id: categoryId || null,
           description,
           billable: billable ?? undefined,
           tags: tags.split(",").map((x) => x.trim()).filter(Boolean),
@@ -80,7 +92,7 @@ export function EntryForm({
       setEnd("");
       setDuration("");
       await onSaved();
-      await suggestFor(projectId, date, true);
+      await suggestFor(projectId, date);
       firstField.current?.focus();
     } catch (e) {
       // A failed save keeps what was typed (concept §8.7).
@@ -99,19 +111,25 @@ export function EntryForm({
       <ErrorLine message={error} />
       {warning && <p role="status" className="warning">{warning}</p>}
       <div className="row">
-        <label>
-          {t("ui.entries.project")}
-          <select ref={firstField} value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {clientName(p.payload.client_id)} / {p.payload.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {!fixedProjectId && (
+          <label>
+            {t("ui.entries.project")}
+            <select ref={firstField} value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {clientName(p.payload.client_id)} / {p.payload.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label>
           {t("ui.entries.category")}
-          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+          <select
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+          >
+            <option value="">{t("ui.entries.no_category")}</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.payload.name}
@@ -121,7 +139,7 @@ export function EntryForm({
         </label>
         <label>
           {t("ui.entries.date")}
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <DateInput value={dateText} format={settings.date_format} onChange={setDateText} />
         </label>
         <fieldset className="modes">
           <legend>{t("ui.entries.mode")}</legend>
@@ -138,11 +156,11 @@ export function EntryForm({
           <>
             <label>
               {t("ui.entries.from")}
-              <input type="time" value={start} onChange={(e) => setStart(e.target.value)} />
+              <TimeInput value={start} clock24h={settings.clock_24h} onChange={setStart} />
             </label>
             <label>
               {t("ui.entries.to")}
-              <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
+              <TimeInput value={end} clock24h={settings.clock_24h} onChange={setEnd} />
             </label>
           </>
         ) : (

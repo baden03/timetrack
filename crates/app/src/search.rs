@@ -72,7 +72,9 @@ impl<S: Store> App<S> {
                 .as_ref()
                 .is_none_or(|t| e.description.to_lowercase().contains(t))
                 && q.project_id.as_ref().is_none_or(|p| *p == e.project_id)
-                && q.category_id.as_ref().is_none_or(|c| *c == e.category_id)
+                && q.category_id
+                    .as_ref()
+                    .is_none_or(|c| Some(c) == e.category_id.as_ref())
                 && q.billable.is_none_or(|b| b == e.billable)
                 && tag
                     .as_ref()

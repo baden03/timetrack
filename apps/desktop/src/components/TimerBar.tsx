@@ -1,12 +1,25 @@
 import { useCallback, useEffect, useState } from "react";
-import { call, inTauri, type SavedEntry, type TimerState } from "../api";
+import { call, inTauri, type Category, type Rec, type SavedEntry, type TimerState } from "../api";
 import type { Data } from "../App";
 import { ErrorLine, errorText } from "./Errors";
-import { t } from "../i18n";
-import { clockIn, displayDate, formatElapsed } from "../time";
+import { t, tError } from "../i18n";
+import { clockIn, displayDate, formatElapsed, parseClock } from "../time";
+import { useDialogs } from "./Dialogs";
+import { TimeInput } from "./FormatInputs";
 
 /** The persistent timer indicator (concept §9) and the stale-timer prompt. */
-export function TimerBar({ data, onChanged }: { data: Data; onChanged: () => void }) {
+export function TimerBar({
+  data,
+  version,
+  showIdle,
+  onChanged,
+}: {
+  data: Data;
+  version: number;
+  /** The start controls are hidden where the page offers its own. */
+  showIdle: boolean;
+  onChanged: () => void;
+}) {
   const [state, setState] = useState<TimerState>({ timer: null, stale: false });
   const [now, setNow] = useState(Date.now());
   const [error, setError] = useState<string | null>(null);
@@ -21,19 +34,35 @@ export function TimerBar({ data, onChanged }: { data: Data; onChanged: () => voi
     }
   }, []);
 
+  // Refresh when something else (a dashboard card) started or changed it.
   useEffect(() => {
     void refresh();
-    const tick = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(tick);
-  }, [refresh]);
+  }, [refresh, version]);
 
-  // The menu bar and the global shortcut live in the shell and tell the
-  // window when to refresh or to open the stop prompt.
+  // Tick on the whole seconds of the elapsed time, counted from the same
+  // stored start as the menu bar, so the two change at the same moment.
+  const startedAt = state.timer
+    ? new Date(state.timer.payload.exact_start_at ?? state.timer.payload.start_at).getTime()
+    : null;
+  useEffect(() => {
+    if (startedAt === null) return;
+    let handle: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      setNow(Date.now());
+      const intoSecond = (Date.now() - startedAt) % 1000;
+      handle = setTimeout(schedule, Math.max(20, 1000 - ((intoSecond + 1000) % 1000)));
+    };
+    schedule();
+    return () => clearTimeout(handle);
+  }, [startedAt]);
+
+  // The global shortcut and the tray menu live in the shell; they ask the
+  // window to open the stop prompt. (Changes to the timer reach the whole
+  // window through App, which reloads everything when the shell announces one.)
   useEffect(() => {
     if (!inTauri) return;
     const unlisten: Array<() => void> = [];
     void import("@tauri-apps/api/event").then(async ({ listen }) => {
-      unlisten.push(await listen("timer-changed", () => void refresh()));
       unlisten.push(
         await listen("timer-stop-request", () => {
           void refresh().then(() => setStopping(true));
@@ -55,13 +84,16 @@ export function TimerBar({ data, onChanged }: { data: Data; onChanged: () => voi
   };
 
   const timer = state.timer;
-  if (!timer) return <IdleBar data={data} error={error} run={run} />;
+  if (!timer) return showIdle ? <IdleBar data={data} error={error} run={run} /> : null;
 
   const p = timer.payload;
   const project = data.projects.find((x) => x.id === p.project_id);
   const client = data.clients.find((c) => c.id === project?.payload.client_id);
   const category = data.categories.find((c) => c.id === p.category_id);
-  const label = `${client?.payload.name ?? ""} / ${project?.payload.name ?? ""} — ${category?.payload.name ?? ""}`;
+  const label = `${client?.payload.name ?? ""} / ${project?.payload.name ?? ""}${category ? ` — ${category.payload.name}` : ""}`;
+  const projectCategories = data.categories.filter(
+    (c) => c.id === p.category_id || (c.payload.status === "active" && project?.payload.category_ids.includes(c.id)),
+  );
 
   if (state.stale || stopping) {
     return (
@@ -74,11 +106,16 @@ export function TimerBar({ data, onChanged }: { data: Data; onChanged: () => voi
           settings.date_format,
         )}
         startedAt={clockIn(p.start_at, p.timezone)}
+        clock24h={settings.clock_24h}
         initialDescription={p.description}
+        categories={projectCategories}
+        initialCategory={p.category_id ?? ""}
         error={error}
-        onStop={(description, endTime) =>
+        onStop={(description, endTime, categoryId) =>
           run(async () => {
-            await call<SavedEntry>("stop_timer", { stop: { description, end_time: endTime } });
+            await call<SavedEntry>("stop_timer", {
+              stop: { description, end_time: endTime, category_id: categoryId || null },
+            });
             setStopping(false);
           })
         }
@@ -98,7 +135,7 @@ export function TimerBar({ data, onChanged }: { data: Data; onChanged: () => voi
       <span className="dot" aria-hidden="true">●</span>
       <strong>{label}</strong>
       <span className="elapsed" aria-label={t("ui.timer.elapsed")}>
-        {formatElapsed(now - new Date(p.start_at).getTime())}
+        {formatElapsed(now - new Date(p.exact_start_at ?? p.start_at).getTime())}
       </span>
       <input
         aria-label={t("ui.entries.description")}
@@ -124,14 +161,12 @@ function IdleBar({
   error: string | null;
   run: (fn: () => Promise<unknown>) => Promise<void>;
 }) {
-  const projects = data.projects.filter((p) => p.payload.status === "active");
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
-  const project = projects.find((p) => p.id === projectId);
-  const categories = data.categories.filter(
-    (c) => c.payload.status === "active" && project?.payload.category_ids.includes(c.id),
+  const projects = data.projects.filter(
+    (p) =>
+      p.payload.status === "active" &&
+      data.clients.find((c) => c.id === p.payload.client_id)?.payload.status === "active",
   );
-  const [categoryId, setCategoryId] = useState("");
-  const chosen = categories.some((c) => c.id === categoryId) ? categoryId : categories[0]?.id ?? "";
+  const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
   if (projects.length === 0) return null;
   return (
     <div className="timer-bar">
@@ -145,22 +180,7 @@ function IdleBar({
           ))}
         </select>
       </label>
-      <label>
-        {t("ui.entries.category")}
-        <select value={chosen} onChange={(e) => setCategoryId(e.target.value)}>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.payload.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button
-        disabled={!chosen}
-        onClick={() =>
-          run(() => call("start_timer", { timer: { project_id: projectId, category_id: chosen } }))
-        }
-      >
+      <button onClick={() => run(() => call("start_timer", { timer: { project_id: projectId } }))}>
         {t("ui.timer.start")}
       </button>
       <ErrorLine message={error} />
@@ -173,20 +193,34 @@ function StopForm(props: {
   stale: boolean;
   startedOn: string;
   startedAt: string;
+  clock24h: boolean;
   initialDescription: string;
+  categories: Rec<Category>[];
+  initialCategory: string;
   error: string | null;
-  onStop: (description: string, endTime?: string) => Promise<void>;
+  onStop: (description: string, endTime: string | undefined, categoryId: string) => Promise<void>;
   onDiscard: () => Promise<void>;
   onCancel?: () => void;
 }) {
   const [description, setDescription] = useState(props.initialDescription);
   const [endTime, setEndTime] = useState("");
+  const [categoryId, setCategoryId] = useState(props.initialCategory);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const dialogs = useDialogs();
   return (
+    <>
+    {dialogs.dialog}
     <form
       className="timer-bar stale card"
       onSubmit={(e) => {
         e.preventDefault();
-        void props.onStop(description, props.stale ? endTime : undefined);
+        if (props.stale) {
+          const parsed = parseClock(endTime);
+          if (parsed === null) return setLocalError(tError("invalid_date_time"));
+          void props.onStop(description, parsed, categoryId);
+        } else {
+          void props.onStop(description, undefined, categoryId);
+        }
       }}
       onKeyDown={(e) => e.key === "Escape" && props.onCancel?.()}
     >
@@ -198,9 +232,20 @@ function StopForm(props: {
         {props.stale && (
           <label>
             {t("ui.timer.real_stop")}
-            <input type="time" required value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+            <TimeInput required value={endTime} clock24h={props.clock24h} onChange={(v) => { setLocalError(null); setEndTime(v); }} />
           </label>
         )}
+        <label>
+          {t("ui.entries.category")}
+          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <option value="">{t("ui.entries.no_category")}</option>
+            {props.categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.payload.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="grow">
           {t("ui.entries.description")}
           <input
@@ -214,8 +259,8 @@ function StopForm(props: {
         <button
           type="button"
           className="danger"
-          onClick={() => {
-            if (window.confirm(t("ui.timer.discard_confirm"))) void props.onDiscard();
+          onClick={async () => {
+            if (await dialogs.confirm(t("ui.timer.discard_confirm"))) void props.onDiscard();
           }}
         >
           {t("ui.timer.discard")}
@@ -226,7 +271,8 @@ function StopForm(props: {
           </button>
         )}
       </div>
-      <ErrorLine message={props.error} />
+      <ErrorLine message={localError ?? props.error} />
     </form>
+    </>
   );
 }

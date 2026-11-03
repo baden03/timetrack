@@ -59,17 +59,22 @@ impl<S: Store> App<S> {
                 .iter()
                 .find(|c| c.0 == project.1.client_id)
                 .ok_or(AppError::NotFound)?;
-            let category = categories
-                .iter()
-                .find(|c| c.0 == e.category_id)
-                .ok_or(AppError::NotFound)?;
+            let category = match &e.category_id {
+                Some(id) => Some(
+                    categories
+                        .iter()
+                        .find(|c| c.0 == *id)
+                        .ok_or(AppError::NotFound)?,
+                ),
+                None => None,
+            };
             entries.push(SummaryEntry {
                 client_id: client.0.clone(),
                 client_name: client.1.name.clone(),
                 project_id: project.0.clone(),
                 project_name: project.1.name.clone(),
-                category_id: category.0.clone(),
-                category_name: category.1.name.clone(),
+                category_id: category.map(|c| c.0.clone()),
+                category_name: category.map(|c| c.1.name.clone()).unwrap_or_default(),
                 description: e.description,
                 minutes: e.minutes,
             });

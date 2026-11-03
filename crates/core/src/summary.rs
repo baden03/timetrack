@@ -16,7 +16,8 @@ pub struct SummaryEntry {
     pub client_name: String,
     pub project_id: Id,
     pub project_name: String,
-    pub category_id: Id,
+    /// `None` for entries without a category.
+    pub category_id: Option<Id>,
     pub category_name: String,
     pub description: String,
     pub minutes: i64,
@@ -25,6 +26,8 @@ pub struct SummaryEntry {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct CategoryBlock {
     pub name: String,
+    /// Entries without a category; shown last, under a translated label.
+    pub uncategorized: bool,
     pub minutes: i64,
     pub descriptions: Vec<String>,
 }
@@ -58,7 +61,7 @@ fn one_line(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-type ProjectAcc = (Id, ProjectBlock, Vec<(Id, CategoryBlock)>);
+type ProjectAcc = (Id, ProjectBlock, Vec<(Option<Id>, CategoryBlock)>);
 type ClientAcc = (Id, ClientBlock, Vec<ProjectAcc>);
 
 pub fn build(entries: &[SummaryEntry]) -> Summary {
@@ -104,6 +107,7 @@ pub fn build(entries: &[SummaryEntry]) -> Summary {
                     e.category_id.clone(),
                     CategoryBlock {
                         name: e.category_name.clone(),
+                        uncategorized: e.category_id.is_none(),
                         minutes: 0,
                         descriptions: vec![],
                     },
@@ -121,7 +125,11 @@ pub fn build(entries: &[SummaryEntry]) -> Summary {
     for (_, mut client, projects) in clients {
         for (_, mut project, categories) in projects {
             let mut cats: Vec<CategoryBlock> = categories.into_iter().map(|c| c.1).collect();
-            cats.sort_by(|a, b| by_name(&a.name, &b.name));
+            cats.sort_by(|a, b| {
+                a.uncategorized
+                    .cmp(&b.uncategorized)
+                    .then_with(|| by_name(&a.name, &b.name))
+            });
             project.minutes = cats.iter().map(|c| c.minutes).sum();
             project.categories = cats;
             client.projects.push(project);
@@ -172,11 +180,12 @@ impl Summary {
                     format_hhmm(project.minutes)
                 ));
                 for category in &project.categories {
-                    out.push_str(&format!(
-                        "  {} — {}\n",
-                        category.name,
-                        format_hhmm(category.minutes)
-                    ));
+                    let name = if category.uncategorized {
+                        catalog.text("summary.uncategorized")
+                    } else {
+                        &category.name
+                    };
+                    out.push_str(&format!("  {} — {}\n", name, format_hhmm(category.minutes)));
                     for description in &category.descriptions {
                         out.push_str(&format!("    - {description}\n"));
                     }
@@ -219,7 +228,7 @@ mod tests {
             client_name: names[client].into(),
             project_id: ids[3 + project].clone(),
             project_name: projects[project].into(),
-            category_id: ids[6 + category].clone(),
+            category_id: Some(ids[6 + category].clone()),
             category_name: categories[category].into(),
             description: description.into(),
             minutes,
@@ -273,6 +282,22 @@ Grand total: 49:30
     }
 
     #[test]
+    fn uncategorized_entries_come_last_under_a_translated_label() {
+        let ids = ids();
+        let mut plain = entry(&ids, 0, 0, 0, "Categorised", 60);
+        let mut none = entry(&ids, 0, 0, 0, "Loose work", 30);
+        none.category_id = None;
+        none.category_name = String::new();
+        plain.category_name = "Zebra".into();
+        let text = build(&[none, plain]).to_text(&Catalog::english(), 2026, 11);
+        let zebra = text.find("Zebra — 1:00").unwrap();
+        let loose = text.find("Uncategorized — 0:30").unwrap();
+        assert!(zebra < loose);
+        assert!(text.contains("    - Loose work\n"));
+        assert!(text.contains("Website relaunch — 1:30"));
+    }
+
+    #[test]
     fn empty_month_says_so() {
         let text = build(&[]).to_text(&Catalog::english(), 2026, 12);
         assert_eq!(
@@ -289,7 +314,7 @@ Grand total: 49:30
             client_name: "Same".into(),
             project_id: g.next_id(),
             project_name: "P".into(),
-            category_id: g.next_id(),
+            category_id: Some(g.next_id()),
             category_name: "C".into(),
             description: "d".into(),
             minutes: 10,

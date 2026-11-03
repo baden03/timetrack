@@ -215,7 +215,11 @@ impl<S: Store> App<S> {
             }
         }
         for e in self.store.list_by_date(KIND_ENTRY, None, None)? {
-            if payload::<timetrack_core::model::TimeEntry>(&e)?.category_id == *id {
+            if payload::<timetrack_core::model::TimeEntry>(&e)?
+                .category_id
+                .as_ref()
+                == Some(id)
+            {
                 return Err(AppError::StillReferenced);
             }
         }

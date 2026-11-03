@@ -104,7 +104,9 @@ pub enum EntryKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TimeEntry {
     pub project_id: Id,
-    pub category_id: Id,
+    /// Optional: an entry may have no category.
+    #[serde(default)]
+    pub category_id: Option<Id>,
     pub description: String,
     pub billable: bool,
     pub tags: Vec<String>,
@@ -129,11 +131,18 @@ pub struct TimeEntry {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Timer {
     pub project_id: Id,
-    pub category_id: Id,
+    /// Chosen at the latest when the timer stops.
+    #[serde(default)]
+    pub category_id: Option<Id>,
     pub description: String,
     pub billable: Option<bool>,
     pub tags: Vec<String>,
+    /// The start to the minute: what the entry will use.
     pub start_at: DateTime<Utc>,
+    /// The moment the timer was actually started, for the elapsed display
+    /// (the window and the menu bar both count from here).
+    #[serde(default)]
+    pub exact_start_at: Option<DateTime<Utc>>,
     /// The zone in force when the timer started.
     pub timezone: String,
 }

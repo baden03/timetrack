@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { call, type Category, type Client, type Project, type Rec, type Status } from "../api";
 import type { Data } from "../App";
+import { useDialogs } from "../components/Dialogs";
 import { ErrorLine, errorText } from "../components/Errors";
 import { t } from "../i18n";
 
 type Kind = "client" | "category" | "project";
 
 export function SetupPage({ data, reload }: { data: Data; reload: () => Promise<void> }) {
+  const dialogs = useDialogs();
   const [error, setError] = useState<string | null>(null);
   const run = async (fn: () => Promise<unknown>) => {
     try {
@@ -18,11 +20,11 @@ export function SetupPage({ data, reload }: { data: Data; reload: () => Promise<
     }
   };
   const rename = async (kind: Kind, rec: Rec<{ name: string }>) => {
-    const name = window.prompt(t("ui.setup.rename_prompt"), rec.payload.name);
+    const name = await dialogs.prompt(t("ui.setup.rename_prompt"), rec.payload.name);
     if (name !== null) await run(() => call(`rename_${kind}`, { id: rec.id, name }));
   };
   const remove = async (kind: Kind, rec: Rec<{ name: string }>) => {
-    if (window.confirm(t("ui.setup.delete_confirm", { name: rec.payload.name })))
+    if (await dialogs.confirm(t("ui.setup.delete_confirm", { name: rec.payload.name })))
       await run(() => call(`delete_${kind}`, { id: rec.id }));
   };
   const toggle = (kind: Kind, rec: Rec<{ status: Status }>) =>
@@ -35,6 +37,7 @@ export function SetupPage({ data, reload }: { data: Data; reload: () => Promise<
 
   return (
     <div>
+      {dialogs.dialog}
       <h1>{t("ui.setup.title")}</h1>
       <ErrorLine message={error} />
       <div className="columns">

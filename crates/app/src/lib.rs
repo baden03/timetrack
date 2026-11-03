@@ -2,6 +2,7 @@
 //! applied. The desktop shell (and later the hub and a public API) call this
 //! and nothing underneath it. It never touches the user interface.
 
+mod dashboard;
 mod dispatch;
 mod entries;
 mod error;
@@ -10,6 +11,7 @@ mod service;
 mod summary;
 mod timer;
 
+pub use dashboard::{ProjectCard, ProjectOverview};
 pub use entries::{EntryPatch, NewEntry, SavedEntry, Suggestion, Timing};
 pub use error::{AppError, Result};
 pub use search::{SearchQuery, SearchResult};
