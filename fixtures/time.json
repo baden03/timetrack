@@ -1,0 +1,106 @@
+{
+  "_source": "Concept v2, README section 18. Times without a zone suffix are local wall-clock times in the case's zone.",
+  "format": [
+    { "minutes": 0, "hhmm": "0:00" },
+    { "minutes": 210, "hhmm": "3:30" },
+    { "minutes": 405, "hhmm": "6:45" },
+    { "minutes": 2550, "hhmm": "42:30" },
+    { "minutes": 7590, "hhmm": "126:30" }
+  ],
+  "sums": [
+    {
+      "name": "three intervals on one day",
+      "spans": [
+        ["2026-11-02T09:00", "2026-11-02T11:30"],
+        ["2026-11-02T11:45", "2026-11-02T13:00"],
+        ["2026-11-02T14:00", "2026-11-02T17:00"]
+      ],
+      "total_minutes": 405,
+      "hhmm": "6:45"
+    },
+    {
+      "name": "edit 09:00-11:00 to 09:00-11:15",
+      "spans": [["2026-11-02T09:00", "2026-11-02T11:15"]],
+      "total_minutes": 135,
+      "hhmm": "2:15"
+    }
+  ],
+  "intervals": [
+    { "name": "09:15 to 12:45", "tz": "Europe/Berlin", "start": "2026-11-02T09:15", "end": "2026-11-02T12:45", "minutes": 210 },
+    { "name": "spring forward: 01:30 to 03:30 is one hour", "tz": "Europe/Berlin", "start": "2026-03-29T01:30", "end": "2026-03-29T03:30", "minutes": 60 },
+    { "name": "fall back: 23:00 to 04:00 is six hours", "tz": "Europe/Berlin", "start": "2026-10-24T23:00", "end": "2026-10-25T04:00", "minutes": 360 }
+  ],
+  "splits": [
+    {
+      "name": "23:00 to 02:00 across midnight",
+      "tz": "Europe/Berlin",
+      "start": "2026-11-02T23:00",
+      "end": "2026-11-03T02:00",
+      "pieces": [
+        { "date": "2026-11-02", "minutes": 60 },
+        { "date": "2026-11-03", "minutes": 120 }
+      ],
+      "total_minutes": 180
+    },
+    {
+      "name": "DST vector: 23:00 on 24 Oct to 04:00 on 25 Oct",
+      "tz": "Europe/Berlin",
+      "start": "2026-10-24T23:00",
+      "end": "2026-10-25T04:00",
+      "pieces": [
+        { "date": "2026-10-24", "minutes": 60 },
+        { "date": "2026-10-25", "minutes": 300 }
+      ],
+      "total_minutes": 360
+    },
+    {
+      "name": "no crossing: one piece",
+      "tz": "Europe/Berlin",
+      "start": "2026-11-02T22:00",
+      "end": "2026-11-02T23:30",
+      "pieces": [{ "date": "2026-11-02", "minutes": 90 }],
+      "total_minutes": 90
+    },
+    {
+      "name": "Costa Rica author keeps the author's date",
+      "tz": "America/Costa_Rica",
+      "start": "2026-11-02T22:00",
+      "end": "2026-11-02T23:30",
+      "pieces": [{ "date": "2026-11-02", "minutes": 90 }],
+      "total_minutes": 90
+    },
+    {
+      "name": "long span ending just before 22:00 next day",
+      "tz": "Europe/Berlin",
+      "start": "2026-11-02T22:00",
+      "end": "2026-11-03T21:59",
+      "pieces": [
+        { "date": "2026-11-02", "minutes": 120 },
+        { "date": "2026-11-03", "minutes": 1319 }
+      ],
+      "total_minutes": 1439
+    }
+  ],
+  "invalid": [
+    { "name": "end before start", "start": "2026-11-02T10:00:00Z", "end": "2026-11-02T09:00:00Z", "now": "2026-11-03T00:00:00Z", "code": "end_not_after_start" },
+    { "name": "start equals end", "start": "2026-11-02T10:00:00Z", "end": "2026-11-02T10:00:00Z", "now": "2026-11-03T00:00:00Z", "code": "end_not_after_start" },
+    { "name": "over 24 hours", "start": "2026-11-01T08:00:00Z", "end": "2026-11-02T08:01:00Z", "now": "2026-11-03T00:00:00Z", "code": "interval_too_long" },
+    { "name": "in the future", "start": "2026-11-02T10:00:00Z", "end": "2026-11-02T12:00:00Z", "now": "2026-11-02T11:00:00Z", "code": "entry_in_future" }
+  ],
+  "durations": [
+    { "minutes": 0, "valid": false },
+    { "minutes": 1, "valid": true },
+    { "minutes": 90, "valid": true },
+    { "minutes": 1440, "valid": true },
+    { "minutes": 1441, "valid": false },
+    { "minutes": -5, "valid": false }
+  ],
+  "bad_groups": [
+    { "name": "gap between pieces", "tz": "Europe/Berlin", "start": "2026-11-02T23:00", "end": "2026-11-03T02:00", "mutation": "gap", "problem": "NotContiguous" },
+    { "name": "overlap between pieces", "tz": "Europe/Berlin", "start": "2026-11-02T23:00", "end": "2026-11-03T02:00", "mutation": "overlap", "problem": "NotContiguous" },
+    { "name": "missing piece", "tz": "Europe/Berlin", "start": "2026-11-02T23:00", "end": "2026-11-03T02:00", "mutation": "drop_piece", "problem": "Incomplete" },
+    { "name": "minutes do not add up", "tz": "Europe/Berlin", "start": "2026-11-02T23:00", "end": "2026-11-03T02:00", "mutation": "minutes", "problem": "MinutesMismatch" },
+    { "name": "date does not match start", "tz": "Europe/Berlin", "start": "2026-11-02T23:00", "end": "2026-11-03T02:00", "mutation": "date", "problem": "DateMismatch" },
+    { "name": "offset out of range", "tz": "Europe/Berlin", "start": "2026-11-02T23:00", "end": "2026-11-03T02:00", "mutation": "offset", "problem": "OffsetOutOfRange" }
+  ]
+}

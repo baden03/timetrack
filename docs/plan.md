@@ -235,6 +235,8 @@ Windows, Linux and phone clients. Hosted hubs. Independent hubs and federation (
 | D9 | Hub packaging, storage and TLS | R2 | Architecture 5.9, questions 3 and 4 |
 | D10 | Scope changes in section 2 | Now | **Confirmed** (3 November 2026) |
 
+Decided 3 November 2026: D1 (Tauri), D2 (Apache-2.0 or MIT), D3, D4, D5, D6 (menu-bar timer in R1). D8: Baden and Claude build; Doug and Steffen test. Task breakdown for P0 and R1: [dev-plan-p0-r1.md](dev-plan-p0-r1.md).
+
 Concept open items still apply (README §22), especially #4 (password method) and #26 (rate for a staying former owner, which moves to R5 with rates).
 
 ---

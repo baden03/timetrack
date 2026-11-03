@@ -1,0 +1,16 @@
+{
+  "error.end_not_after_start": "The end must be after the start.",
+  "error.interval_too_long": "An entry cannot be longer than 24 hours.",
+  "error.duration_out_of_range": "The duration must be between 0:01 and 24:00.",
+  "error.entry_in_future": "An entry cannot end in the future.",
+  "error.nonexistent_local_time": "That time does not exist on this date in this time zone.",
+  "error.inconsistent_split": "The split entry is not consistent.",
+  "error.record_deleted": "This record has been deleted.",
+  "error.history_empty": "No history was found for this record.",
+  "error.history_broken": "The change history of this record is inconsistent.",
+  "error.invalid_origin": "The origin is not valid.",
+  "error.invalid_id": "The identifier is not valid.",
+  "error.storage": "The data could not be saved.",
+  "error.revision_conflict": "This record was changed elsewhere; reload it and try again.",
+  "error.not_found": "The record was not found."
+}
