@@ -454,7 +454,7 @@ dependencies = [
 
 [[package]]
 name = "timetrack-app"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -468,7 +468,7 @@ dependencies = [
 
 [[package]]
 name = "timetrack-core"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -480,14 +480,14 @@ dependencies = [
 
 [[package]]
 name = "timetrack-hub"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "timetrack-core",
 ]
 
 [[package]]
 name = "timetrack-storage"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "chrono",
  "rusqlite",
