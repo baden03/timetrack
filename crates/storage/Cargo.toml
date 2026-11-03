@@ -11,10 +11,11 @@ workspace = true
 [dependencies]
 timetrack-core = { path = "../core" }
 chrono = { version = "0.4", features = ["serde"] }
-rusqlite = { version = "0.41", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled", "backup"] }
 serde = "1"
 serde_json = "1"
 thiserror = "2"
 
 [dev-dependencies]
 serde_json = "1"
+rusqlite = { version = "0.41", features = ["bundled", "backup"] }

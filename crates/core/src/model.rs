@@ -90,6 +90,13 @@ pub struct Settings {
     pub clock_24h: bool,
     pub theme: Theme,
     pub entry_window_days: u32,
+    /// Days without a backup before the reminder appears.
+    #[serde(default = "default_backup_reminder_days")]
+    pub backup_reminder_days: u32,
+}
+
+fn default_backup_reminder_days() -> u32 {
+    7
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

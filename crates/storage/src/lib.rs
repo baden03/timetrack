@@ -8,6 +8,16 @@ mod sqlite;
 
 pub use sqlite::SqliteStore;
 
+use std::path::Path;
+
+/// What a backup file holds, shown before it replaces the current data.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct BackupInfo {
+    pub schema_version: i64,
+    pub records: i64,
+    pub history_entries: i64,
+}
+
 use timetrack_core::id::Id;
 use timetrack_core::record::{HistoryEntry, Record};
 
@@ -21,6 +31,8 @@ pub enum StoreError {
     NotFound,
     #[error("unsupported schema version {0}")]
     UnsupportedSchema(i64),
+    #[error("not a TimeTrack backup")]
+    NotABackup,
 }
 
 impl StoreError {
@@ -30,6 +42,7 @@ impl StoreError {
             StoreError::Storage(_) | StoreError::UnsupportedSchema(_) => "storage",
             StoreError::RevisionConflict { .. } => "revision_conflict",
             StoreError::NotFound => "not_found",
+            StoreError::NotABackup => "not_a_backup",
         }
     }
 }
@@ -61,6 +74,14 @@ pub trait Store {
     /// Small installation-level values (identity), outside the record model.
     fn meta_get(&self, key: &str) -> Result<Option<String>, StoreError>;
     fn meta_set(&mut self, key: &str, value: &str) -> Result<(), StoreError>;
+    /// Writes a consistent copy of everything to one file.
+    fn backup_to(&self, path: &Path) -> Result<BackupInfo, StoreError>;
+    /// Checks that a file is a readable, supported backup.
+    fn inspect_backup(path: &Path) -> Result<BackupInfo, StoreError>
+    where
+        Self: Sized;
+    /// Replaces everything with the contents of a backup file.
+    fn restore_from(&mut self, path: &Path) -> Result<BackupInfo, StoreError>;
     fn get(&self, id: &Id) -> Result<Option<Record>, StoreError>;
     /// Records of a kind, oldest first, tombstones excluded unless asked.
     fn list(&self, kind: &str, include_deleted: bool) -> Result<Vec<Record>, StoreError>;

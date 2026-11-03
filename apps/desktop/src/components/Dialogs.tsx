@@ -32,6 +32,7 @@ function DialogView({ request, close }: { request: Request; close: () => void })
   }, []);
 
   const finish = (ok: boolean) => {
+    ref.current?.close(); // returns focus to whatever opened the dialog
     if (request.kind === "confirm") request.resolve(ok);
     else request.resolve(ok ? text : null);
     close();

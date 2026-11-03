@@ -98,11 +98,11 @@ export function ProjectPage({
       <EntryForm data={data} today={today} onSaved={changed} fixedProjectId={projectId} />
       <div className="row">
         <label className="check">
-          <input type="radio" checked={view === "day"} onChange={() => setView("day")} />
+          <input type="radio" name="project-view" checked={view === "day"} onChange={() => setView("day")} />
           {t("ui.entries.view_day")}
         </label>
         <label className="check">
-          <input type="radio" checked={view === "week"} onChange={() => setView("week")} />
+          <input type="radio" name="project-view" checked={view === "week"} onChange={() => setView("week")} />
           {t("ui.entries.view_week")}
         </label>
       </div>

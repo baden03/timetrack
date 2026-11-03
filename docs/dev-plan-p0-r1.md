@@ -129,3 +129,20 @@ Doug and Steffen test from week 4 only for the experience (timer, shortcut, summ
 1. Write the scenario tests for the sync spike (S) while the real-use month runs.
 2. Run the spike (architecture §7.2) and decide the sync approach.
 3. Break R2 into tasks the same way as this document.
+
+---
+
+# 9. R1 status (end of week 4)
+
+| # | Acceptance criterion | Evidence | Still to do |
+|---|---|---|---|
+| 1 | A real billing month replaces the Google Doc; the summary matches the manual figures | Summary built to the signed-off format; tested | **Baden's real-use month** (cannot be tested by us) |
+| 2 | Works with the network disabled | No network crates, no fetch outside the browser-only dev bridge, strict CSP; `scripts/no-network.sh` in CI | Try the built app with Wi-Fi off |
+| 3 | Concept fixtures pass in the real application, including DST | Service tests: DST both ways, month, year and leap-day ends, other zones (`crates/app/tests/hardening.rs`) | none |
+| 4 | An entry can be created, edited and finished from the keyboard | Done in a browser with keys only: create, move to the row, edit, save, focus returns to the row | Repeat once in the built app |
+| 5 | Backup then restore on a fresh installation reproduces identical data | Storage and service tests compare records and history exactly; restore also offered on the first screen | Try on Doug's or Steffen's Mac |
+| 6 | Quitting or crashing during a timer does not lose it; the stale prompt appears | Restart test, and a `kill -9` of the service mid-timer; stale prompt tested | none |
+| 7 | Every edit is visible in the history with before and after | History panel; tested | none |
+| 8 | Category totals add up; every description appears | Randomized test on the summary | none |
+
+Added beyond the first plan because of feedback: dashboard of project cards and a project page, optional category, date and time formats and typing on blur, stronger dark mode, menu bar and window timer kept in sync.

@@ -30,6 +30,7 @@ export interface Settings {
   clock_24h: boolean;
   theme: "system" | "light" | "dark";
   entry_window_days: number;
+  backup_reminder_days: number;
 }
 export interface TimeEntry {
   project_id: Id;
@@ -51,6 +52,7 @@ export interface TimeEntry {
 }
 export interface AppState {
   first_run: boolean;
+  last_backup_at: string | null;
   identity: { origin: string; author: string; device: string };
   settings: Rec<Settings>;
 }

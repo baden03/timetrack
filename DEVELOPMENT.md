@@ -28,3 +28,15 @@ cargo run -p timetrack-app --example dev_bridge -- /tmp/tt-dev.sqlite   # servic
 cd apps/desktop && pnpm dev                                              # UI on http://localhost:1420
 ```
 The shell stores its data in the app data directory; set `TT_DATA_DIR` to use a throwaway folder.
+
+## Building the macOS app
+```bash
+cd apps/desktop && pnpm install && pnpm tauri build --bundles app
+```
+The app is written to `apps/desktop/src-tauri/target/release/bundle/macos/TimeTrack.app` and is signed ad hoc (no Apple developer account needed; see `docs/install-macos.md` for what that means for testers). To share it:
+```bash
+ditto -c -k --keepParent apps/desktop/src-tauri/target/release/bundle/macos/TimeTrack.app TimeTrack.zip
+```
+
+## Checks
+`scripts/check.sh` runs everything CI runs: formatting, clippy, all Rust tests, the desktop shell's tests, the UI type check and tests, and `scripts/no-network.sh`, which keeps release 1 free of network use.

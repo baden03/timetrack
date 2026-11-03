@@ -101,6 +101,18 @@ impl<S: Store> App<S> {
             "search_entries" => out(self.search_entries(&arg::<SearchQuery>(args, "query")?)?),
             "dashboard" => out(self.dashboard()?),
             "project_overview" => out(self.project_overview(&arg::<Id>(args, "project_id")?)?),
+            "backup" => out(self.backup(std::path::Path::new(&arg::<String>(args, "path")?))?),
+            "inspect_backup" => {
+                out(self.inspect_backup(std::path::Path::new(&arg::<String>(args, "path")?))?)
+            }
+            "restore" => {
+                let path: String = arg(args, "path")?;
+                // The shell names a place for the safety copy; otherwise it
+                // goes next to the backup file.
+                let safety = opt::<String>(args, "safety_path")?
+                    .unwrap_or_else(|| format!("{path}.before-restore.sqlite"));
+                out(self.restore(std::path::Path::new(&path), std::path::Path::new(&safety))?)
+            }
             "monthly_summary" => out(self.monthly_summary(&arg::<String>(args, "month")?)?),
             "history" => out(self.history(&arg::<Id>(args, "id")?)?),
             _ => Err(AppError::UnknownCommand),

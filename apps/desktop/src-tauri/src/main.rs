@@ -21,7 +21,8 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 use timetrack_app::{system_clock, App};
 use timetrack_storage::SqliteStore;
 
-struct AppState(Mutex<App<SqliteStore>>);
+/// The service and the folder the data lives in.
+struct AppState(Mutex<App<SqliteStore>>, PathBuf);
 
 #[derive(Serialize)]
 struct CommandError {
@@ -48,11 +49,19 @@ fn call(
     let mut app = state.0.lock().map_err(|_| CommandError {
         code: "storage".into(),
     })?;
+    let mut args = args;
+    if command == "restore" {
+        // Before a restore the current data is copied here, so it can be undone.
+        let dir = state.1.join("backups");
+        let _ = std::fs::create_dir_all(&dir);
+        let stamp = Utc::now().format("%Y%m%d-%H%M%S");
+        args["safety_path"] = json!(dir.join(format!("before-restore-{stamp}.sqlite")));
+    }
     let result = app.dispatch(&command, &args).map_err(|e| CommandError {
         code: e.code().into(),
     });
     drop(app);
-    if result.is_ok() && TIMER_CHANGES.contains(&command.as_str()) {
+    if result.is_ok() && (TIMER_CHANGES.contains(&command.as_str()) || command == "restore") {
         let _ = app_handle.emit("timer-changed", ());
     }
     result
@@ -126,6 +135,7 @@ fn main() {
 
     let built = tauri::Builder::default()
         .plugin(plugin)
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![call])
         // Closing the window hides it: the timer, the menu bar and the
         // shortcut keep working, and the window can be shown again.
@@ -141,7 +151,7 @@ fn main() {
             let store = SqliteStore::open(&dir.join("timetrack.sqlite"))?;
             let zone = iana_time_zone::get_timezone().unwrap_or_else(|_| "UTC".into());
             let service = App::open(store, &zone, system_clock())?;
-            app.manage(AppState(Mutex::new(service)));
+            app.manage(AppState(Mutex::new(service), dir));
 
             let toggle_item = MenuItem::with_id(app, "toggle", "Start timer", true, None::<&str>)?;
             let menu = Menu::with_items(
